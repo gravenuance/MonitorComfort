@@ -162,14 +162,24 @@ internal sealed class ComfortController : IAsyncDisposable
                     await RestoreAsync(cancellationToken);
                 }
 
-                var fullscreenChanged = _fullscreen.Observe(_detector.FullscreenDeviceName());
+                var window = _detector.Detect();
+                var fullscreenChanged = _fullscreen.Observe(window?.DeviceName);
                 var requested = Interlocked.Exchange(ref _applyRequested, 0) == 1;
                 var now = _time.GetUtcNow();
                 if (fullscreenChanged || requested || now >= nextPlan)
                 {
-                    if (fullscreenChanged)
+                    if (fullscreenChanged && window is not null)
                     {
-                        _log.Information("Full-screen monitor is now {Device}", _fullscreen.Current ?? "none");
+                        _log.Information(
+                            "Full-screen on {Device}: {WindowClass} of {Process} at {Bounds}",
+                            window.DeviceName,
+                            window.WindowClass,
+                            window.ProcessName,
+                            window.Bounds);
+                    }
+                    else if (fullscreenChanged)
+                    {
+                        _log.Information("Full-screen ended");
                     }
 
                     await ApplyAsync(now, cancellationToken);

@@ -80,3 +80,5 @@ dotnet_diagnostic.CA1724.severity = none
 dotnet_diagnostic.CA1707.severity = none   # underscores in test names are idiomatic
 # xUnit1051: tests here are synchronous or use fake time; no cancellation to pass.
 dotnet_diagnostic.xUnit1051.severity = none
+# CA2201: tests throw COMException to stand in for the Windows APIs that do.
+dotnet_diagnostic.CA2201.severity = none

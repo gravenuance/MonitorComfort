@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 
 namespace MonitorComfort.App;
 
@@ -20,9 +21,15 @@ public sealed partial class App : Application
             var tray = new TrayIconController(desktop, host);
 #pragma warning restore CA2000
             desktop.Exit += (_, _) => tray.Dispose();
+            // A failure in a UI handler is logged and the app carries on; it must never close the tray app.
+            Dispatcher.UIThread.UnhandledException += (_, e) =>
+            {
+                host.Log.Error(e.Exception, "Unhandled exception on the UI thread");
+                e.Handled = true;
+            };
             host.Start();
 
-            if (host.Settings.Current.Location is null)
+            if (host.Settings.IsFirstRun)
             {
                 tray.ShowSettings();
             }

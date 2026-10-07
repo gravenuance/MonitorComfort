@@ -22,7 +22,7 @@ public sealed class SettingsFileTests : IDisposable
         Assert.False(result.Existed);
         Assert.Null(result.Problem);
         Assert.Equal(60, result.Value.Day.Brightness);
-        Assert.Null(result.Value.Location);
+        Assert.Equal(new GeoLocation(59.33, 18.07), result.Value.Location);
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public sealed class SettingsFileTests : IDisposable
         var result = SettingsFiles.Settings(_directory).Load();
 
         Assert.Contains("invalid values", result.Problem, StringComparison.Ordinal);
-        Assert.Null(result.Value.Location);
+        Assert.Equal(new GeoLocation(59.33, 18.07), result.Value.Location);
     }
 
     [Fact]

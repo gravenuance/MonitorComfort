@@ -73,8 +73,8 @@ public sealed record ComfortSettings
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
-    /// <summary>Null until the user sets it; nothing is adjusted without it.</summary>
-    public GeoLocation? Location { get; init; }
+    /// <summary>Stockholm unless the user sets another; nothing is adjusted while it is null.</summary>
+    public GeoLocation? Location { get; init; } = new GeoLocation(59.33, 18.07);
 
     public TimeOnly NightStart { get; init; } = new(22, 30);
 
