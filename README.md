@@ -43,13 +43,14 @@ dotnet run --project tests/MonitorComfort.Tests -c Release
 dotnet run --project src/MonitorComfort.App -c Release
 ```
 
-On first start the settings window opens: set your location (or **Use my location**), then
-close it. The app keeps running in the tray.
+On first start the settings window opens with Stockholm as the location; change it there if
+needed, then close the window. The app keeps running in the tray. (**Use my location** needs
+the Windows location service, which some managed PCs disable.)
 
 ## Install
 
 ```powershell
-dotnet publish src/MonitorComfort.App -c Release -p:PublishSingleFile=true -o publish
+dotnet publish src/MonitorComfort.App -c Release -o publish
 ```
 
 Copy `publish/MonitorComfort.exe` anywhere permanent and run it. **Start with Windows** in

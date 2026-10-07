@@ -14,9 +14,11 @@
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
-  <!-- Applied when publishing (dotnet publish -p:PublishSingleFile=true): one self-contained
-       exe with native libraries self-extracted on first run. -->
-  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+  <!-- `dotnet publish -c Release` makes one self-contained exe with native libraries self-extracted
+       on first run. Declared here rather than on the command line so build and publish restore
+       the same packages and the lock files stay stable. -->
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
