@@ -54,7 +54,7 @@ public sealed class ComfortPlannerTests
         var plan = Plan(Utc(2026, 12, 21, 22, 30), Winter, NoRoomLight);
 
         Assert.Equal(Phase.Night, plan.Phase);
-        Assert.False(plan.RoomLit);
+        Assert.Equal(AmbientSource.Schedule, plan.Source);
         Assert.Equal(15, plan.Brightness);
         Assert.Equal(3400, plan.Kelvin);
     }
@@ -75,7 +75,7 @@ public sealed class ComfortPlannerTests
         // Neutral 4000K tubes at normal level: at least 40% and no warmer than 3500K.
         var plan = Plan(Utc(2026, 12, 21, 22, 30), Winter, NeutralRoomLight);
 
-        Assert.True(plan.RoomLit);
+        Assert.Equal(AmbientSource.RoomModel, plan.Source);
         Assert.Equal(40, plan.Brightness);
         Assert.Equal(3500, plan.Kelvin);
     }

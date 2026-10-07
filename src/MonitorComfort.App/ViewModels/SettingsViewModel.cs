@@ -296,9 +296,17 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         ControllerState.Paused => "Paused",
         ControllerState.Active when status.Plan is { } plan => string.Create(
             CultureInfo.CurrentCulture,
-            $"{PhaseName(plan.Phase)} · {plan.Brightness}% · {plan.Kelvin}K{(plan.RoomLit ? " · room lit" : "")}"),
+            $"{PhaseName(plan.Phase)} · {plan.Brightness}% · {plan.Kelvin}K{SourceSuffix(plan.Source)}"),
         ControllerState.Active => "Active",
         _ => throw new InvalidOperationException($"Unhandled state {status.State}"),
+    };
+
+    private static string SourceSuffix(AmbientSource source) => source switch
+    {
+        AmbientSource.Schedule => "",
+        AmbientSource.RoomModel => " · room lit",
+        AmbientSource.Camera => " · measured",
+        _ => throw new InvalidOperationException($"Unhandled source {source}"),
     };
 
     private static string PhaseName(Phase phase) => phase switch

@@ -1,3 +1,4 @@
+using MonitorComfort.Core.Ambient;
 using MonitorComfort.Core.Colour;
 using MonitorComfort.Core.Settings;
 using MonitorComfort.Core.Solar;
@@ -11,15 +12,24 @@ public enum Phase
     Night,
 }
 
+/// <summary>What fitted the schedule to the room: nothing, the modelled room lights, or a webcam reading.</summary>
+public enum AmbientSource
+{
+    Schedule,
+    RoomModel,
+    Camera,
+}
+
 /// <summary>What one monitor should show now.</summary>
 public sealed record MonitorTarget(string MonitorId, int Brightness, int Kelvin);
 
 /// <summary>The schedule's result before per-monitor adjustments, plus each monitor's target.</summary>
-public sealed record ComfortPlan(Phase Phase, bool RoomLit, int Brightness, int Kelvin, IReadOnlyList<MonitorTarget> Targets);
+public sealed record ComfortPlan(Phase Phase, AmbientSource Source, int Brightness, int Kelvin, IReadOnlyList<MonitorTarget> Targets);
 
 /// <summary>
 /// Blends the day, evening and night profiles by sun elevation and bedtime, then fits the
-/// result to the room's light, each monitor's offset, and whether something is full-screen.
+/// result to the room's light (measured by webcam, else modelled), each monitor's offset, and
+/// whether something is full-screen.
 /// </summary>
 public static class ComfortPlanner
 {
@@ -39,7 +49,8 @@ public static class ComfortPlanner
         ComfortSettings settings,
         GeoLocation location,
         IReadOnlyList<string> monitorIds,
-        string? fullscreenMonitorId)
+        string? fullscreenMonitorId,
+        AmbientReading? ambient = null)
     {
         ArgumentNullException.ThrowIfNull(timeZone);
         ArgumentNullException.ThrowIfNull(settings);
@@ -54,11 +65,27 @@ public static class ComfortPlanner
         var brightness = (int)Math.Round(Lerp(darkBrightness, settings.Day.Brightness, daylight));
         var kelvin = (int)Math.Round(Lerp(darkKelvin, settings.Day.Kelvin, daylight));
 
-        var roomLit = settings.RoomLight.Enabled && IsRoomLit(now, timeZone, settings.RoomLight, location);
-        if (roomLit)
+        var camera = settings.CameraLight;
+        AmbientSource source;
+        if (camera.IsReady && ambient is not null && AmbientMapping.IsFresh(ambient, now))
         {
+            // The measurement replaces the schedule's brightness; the schedule still decides how warm night gets.
+            source = AmbientSource.Camera;
+            brightness = AmbientMapping.Brightness(camera.Calibration!, ambient.LightStops, camera.BrightnessPerStop);
+            if (AmbientMapping.ReliableKelvin(camera.Calibration!, ambient) is { } lightKelvin)
+            {
+                kelvin = Math.Max(kelvin, lightKelvin - RoomLightKelvinMargin);
+            }
+        }
+        else if (settings.RoomLight.Enabled && IsRoomLit(now, timeZone, settings.RoomLight, location))
+        {
+            source = AmbientSource.RoomModel;
             brightness = Math.Max(brightness, MinimumBrightness(settings.RoomLight.Level));
             kelvin = Math.Max(kelvin, LightKelvin(settings.RoomLight.Colour) - RoomLightKelvinMargin);
+        }
+        else
+        {
+            source = AmbientSource.Schedule;
         }
 
         kelvin = ColourTemperature.Clamp(kelvin);
@@ -83,7 +110,7 @@ public static class ComfortPlanner
             targets.Add(new MonitorTarget(id, monitorBrightness, kelvin));
         }
 
-        return new ComfortPlan(phase, roomLit, brightness, kelvin, targets);
+        return new ComfortPlan(phase, source, brightness, kelvin, targets);
     }
 
     /// <summary>

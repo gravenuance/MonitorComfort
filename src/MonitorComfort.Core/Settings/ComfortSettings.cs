@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using MonitorComfort.Core.Ambient;
 using MonitorComfort.Core.Colour;
 using MonitorComfort.Core.Solar;
 
@@ -41,6 +42,23 @@ public sealed record RoomLightSettings
     public LightColour Colour { get; init; } = LightColour.Neutral;
 
     public LightLevel Level { get; init; } = LightLevel.Normal;
+}
+
+/// <summary>Opt-in webcam light meter; it needs a measured camera response and a calibration to take effect.</summary>
+public sealed record CameraLightSettings
+{
+    public bool Enabled { get; init; }
+
+    public int IntervalMinutes { get; init; } = 10;
+
+    /// <summary>Brightness change for each doubling or halving of the room light.</summary>
+    public double BrightnessPerStop { get; init; } = 10;
+
+    public CameraResponse? Response { get; init; }
+
+    public AmbientCalibration? Calibration { get; init; }
+
+    public bool IsReady => Enabled && Response is not null && Calibration is not null;
 }
 
 public sealed record FullscreenSettings
@@ -89,6 +107,8 @@ public sealed record ComfortSettings
     public RoomLightSettings RoomLight { get; init; } = new();
 
     public FullscreenSettings Fullscreen { get; init; } = new();
+
+    public CameraLightSettings CameraLight { get; init; } = new();
 
     /// <summary>Keyed by PnP hardware ID, matched case-insensitively however the value was built.</summary>
     public IReadOnlyDictionary<string, MonitorSettings> Monitors
@@ -146,6 +166,7 @@ public sealed record ComfortSettings
         var defaults = new ComfortSettings();
         var roomLight = RoomLight ?? defaults.RoomLight;
         var fullscreen = Fullscreen ?? defaults.Fullscreen;
+        var cameraLight = CameraLight ?? defaults.CameraLight;
         var monitors = Monitors.ToDictionary(
             pair => pair.Key,
             pair => pair.Value is null
@@ -171,6 +192,11 @@ public sealed record ComfortSettings
             {
                 OtherMonitorBrightnessPercent = Clamp(
                     "Full-screen dim level", fullscreen.OtherMonitorBrightnessPercent, 0, 100),
+            },
+            CameraLight = cameraLight with
+            {
+                IntervalMinutes = Clamp("Camera interval", cameraLight.IntervalMinutes, 5, 60),
+                BrightnessPerStop = Math.Clamp(cameraLight.BrightnessPerStop, 2, 30),
             },
             Monitors = monitors,
         };
