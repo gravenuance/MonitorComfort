@@ -1,0 +1,193 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MonitorComfort.App.ViewModels"
+        x:Class="MonitorComfort.App.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="MonitorComfort"
+        Width="500" Height="780" MinWidth="380" MinHeight="400"
+        WindowStartupLocation="CenterScreen">
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Escape" Command="{Binding $parent[Window].Close}" />
+  </Window.KeyBindings>
+
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Padding="{StaticResource PagePadding}">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{StaticResource ColumnSpacing}">
+        <TextBlock Classes="status" Classes.attention="{Binding NeedsAttention}" Text="{Binding StatusText}"
+                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding StatusText}"
+                   AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Status" />
+        <ToggleButton Grid.Column="1" IsChecked="{Binding IsPaused, Mode=OneWay}" Command="{Binding TogglePauseCommand}"
+                      Content="Pause 1 hour" ToolTip.Tip="Pause or resume adjustments"
+                      AutomationProperties.Name="Pause for one hour" />
+      </Grid>
+    </Border>
+
+    <ScrollViewer Padding="16,0,16,4">
+      <StackPanel>
+
+        <Border Classes="card">
+          <StackPanel Spacing="{StaticResource RowSpacing}">
+            <TextBlock Classes="section" Text="Location" />
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="{StaticResource ColumnSpacing}" RowSpacing="{StaticResource RowSpacing}">
+              <TextBlock Classes="label" Text="Latitude" />
+              <NumericUpDown Grid.Column="1" Value="{Binding Latitude}" Minimum="-90" Maximum="90" Increment="0.01" FormatString="0.00"
+                             PlaceholderText="59.33" AutomationProperties.Name="Latitude" />
+              <TextBlock Grid.Row="1" Classes="label" Text="Longitude" />
+              <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding Longitude}" Minimum="-180" Maximum="180" Increment="0.01" FormatString="0.00"
+                             PlaceholderText="18.07" AutomationProperties.Name="Longitude" />
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource ColumnSpacing}">
+              <Button Content="Use my location" Command="{Binding UseMyLocationCommand}" />
+              <TextBlock Grid.Column="1" Classes="hint" VerticalAlignment="Center"
+                         Text="{Binding LocationMessage}" IsVisible="{Binding LocationMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <TextBlock Grid.Column="1" Classes="hint" VerticalAlignment="Center"
+                         Text="{Binding SunTimes}" IsVisible="{Binding LocationMessage, Converter={x:Static ObjectConverters.IsNull}}" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="{StaticResource RowSpacing}">
+            <TextBlock Classes="section" Text="Bedtime" />
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="{StaticResource ColumnSpacing}" RowSpacing="{StaticResource RowSpacing}">
+              <TextBlock Classes="label" Text="Night starts" />
+              <TimePicker Grid.Column="1" SelectedTime="{Binding NightStart}" ClockIdentifier="24HourClock" MinuteIncrement="5"
+                          AutomationProperties.Name="Night starts" />
+              <TextBlock Grid.Row="1" Classes="label" Text="Night ends" />
+              <TimePicker Grid.Row="1" Grid.Column="1" SelectedTime="{Binding NightEnd}" ClockIdentifier="24HourClock" MinuteIncrement="5"
+                          AutomationProperties.Name="Night ends" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="{StaticResource RowSpacing}">
+            <TextBlock Classes="section" Text="Profiles" />
+            <ItemsControl ItemsSource="{Binding Profiles}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="12" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ProfileViewModel">
+                  <Grid ColumnDefinitions="72,Auto,*,56" RowDefinitions="Auto,Auto" ColumnSpacing="{StaticResource ColumnSpacing}">
+                    <TextBlock Grid.RowSpan="2" Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Classes="label" Text="Brightness" />
+                    <Slider Grid.Column="2" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
+                            Value="{Binding Brightness}" AutomationProperties.Name="{Binding Name, StringFormat='{}{0} brightness'}" />
+                    <TextBlock Grid.Column="3" Classes="value" Text="{Binding Brightness, StringFormat='{}{0:0}%'}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="label" Text="Warmth" />
+                    <!-- Reversed so moving right means warmer. -->
+                    <Slider Grid.Row="1" Grid.Column="2" Minimum="2000" Maximum="6500" TickFrequency="100" IsSnapToTickEnabled="True"
+                            IsDirectionReversed="True"
+                            Value="{Binding Kelvin}" AutomationProperties.Name="{Binding Name, StringFormat='{}{0} colour temperature'}" />
+                    <TextBlock Grid.Row="1" Grid.Column="3" Classes="value" Text="{Binding Kelvin, StringFormat='{}{0:0}K'}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="{StaticResource RowSpacing}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="section" Text="Room lights" VerticalAlignment="Center" Margin="0" />
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding RoomLightEnabled}" OnContent="" OffContent=""
+                            AutomationProperties.Name="Room lights" />
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" IsEnabled="{Binding RoomLightEnabled}"
+                  ColumnSpacing="{StaticResource ColumnSpacing}" RowSpacing="{StaticResource RowSpacing}">
+              <TextBlock Classes="label" Text="On after sunset" />
+              <NumericUpDown Grid.Column="1" Grid.ColumnSpan="2" Value="{Binding LightsOnOffset}" Minimum="-180" Maximum="180" Increment="5"
+                             FormatString="0 min" AutomationProperties.Name="Minutes after sunset the lights turn on" />
+
+              <TextBlock Grid.Row="1" Classes="label" Text="Off" />
+              <ComboBox Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding LightsOffIndex}" HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="Lights turn off">
+                <ComboBoxItem Content="At sunrise" />
+                <ComboBoxItem Content="At a set time" />
+              </ComboBox>
+              <TimePicker Grid.Row="1" Grid.Column="2" SelectedTime="{Binding LightsOffTime}" ClockIdentifier="24HourClock" MinuteIncrement="5"
+                          IsVisible="{Binding LightsOffAtTime}" AutomationProperties.Name="Lights-off time" />
+
+              <TextBlock Grid.Row="2" Classes="label" Text="Colour" />
+              <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" SelectedIndex="{Binding LightColourIndex}" HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="Light colour">
+                <ComboBoxItem Content="Warm white (2700K)" />
+                <ComboBoxItem Content="Neutral white (4000K)" />
+                <ComboBoxItem Content="Daylight (6500K)" />
+              </ComboBox>
+
+              <TextBlock Grid.Row="3" Classes="label" Text="Level" />
+              <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" SelectedIndex="{Binding LightLevelIndex}" HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="Light level">
+                <ComboBoxItem Content="Dim" />
+                <ComboBoxItem Content="Normal" />
+                <ComboBoxItem Content="Bright" />
+              </ComboBox>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="{StaticResource RowSpacing}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="section" Text="Dim other monitors in full-screen" VerticalAlignment="Center" Margin="0" TextWrapping="Wrap" />
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding DimOtherMonitors}" OnContent="" OffContent=""
+                            AutomationProperties.Name="Dim other monitors in full-screen" />
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*,56" ColumnSpacing="{StaticResource ColumnSpacing}" IsEnabled="{Binding DimOtherMonitors}">
+              <TextBlock Classes="label" Text="Keep" />
+              <Slider Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" Value="{Binding OtherMonitorPercent}"
+                      AutomationProperties.Name="Other monitors' brightness during full-screen, percent of normal" />
+              <TextBlock Grid.Column="2" Classes="value" Text="{Binding OtherMonitorPercent, StringFormat='{}{0:0}%'}" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="{StaticResource RowSpacing}">
+            <TextBlock Classes="section" Text="Monitors" />
+            <TextBlock Classes="hint" Text="No monitors detected yet" IsVisible="{Binding !Monitors.Count}" />
+            <ItemsControl ItemsSource="{Binding Monitors}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="12" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:MonitorViewModel">
+                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="4">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Id}" />
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding Enabled}" OnContent="" OffContent=""
+                                  AutomationProperties.Name="{Binding Name, StringFormat='Adjust {0}'}" />
+                    <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,56" ColumnSpacing="{StaticResource ColumnSpacing}"
+                          IsEnabled="{Binding Enabled}">
+                      <TextBlock Classes="label" Text="Brightness offset" />
+                      <Slider Grid.Column="1" Minimum="-50" Maximum="50" TickFrequency="1" IsSnapToTickEnabled="True"
+                              Value="{Binding BrightnessOffset}" AutomationProperties.Name="{Binding Name, StringFormat='{}{0} brightness offset'}" />
+                      <TextBlock Grid.Column="2" Classes="value" Text="{Binding BrightnessOffset, StringFormat='{}{0:+0;-0;0}'}" />
+                    </Grid>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="section" Text="Start with Windows" VerticalAlignment="Center" Margin="0" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding StartWithWindows}" OnContent="" OffContent=""
+                          AutomationProperties.Name="Start with Windows" />
+          </Grid>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>
