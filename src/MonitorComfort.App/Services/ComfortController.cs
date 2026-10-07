@@ -1,3 +1,4 @@
+using MonitorComfort.App.Ambient;
 using MonitorComfort.App.Monitors;
 using MonitorComfort.Core.Colour;
 using MonitorComfort.Core.Context;
@@ -42,6 +43,7 @@ internal sealed class ComfortController : IAsyncDisposable
     private readonly DdcMonitorService _ddc;
     private readonly FullscreenDetector _detector;
     private readonly VersionedJsonFile<OriginalMonitorValues> _originalsFile;
+    private readonly AmbientLightService _ambient;
     private readonly TimeProvider _time;
     private readonly ILogger _log;
     private readonly SettledValue<string?> _fullscreen;
@@ -60,6 +62,7 @@ internal sealed class ComfortController : IAsyncDisposable
         DdcMonitorService ddc,
         FullscreenDetector detector,
         VersionedJsonFile<OriginalMonitorValues> originalsFile,
+        AmbientLightService ambient,
         TimeProvider time,
         ILogger log)
     {
@@ -67,6 +70,7 @@ internal sealed class ComfortController : IAsyncDisposable
         _ddc = ddc;
         _detector = detector;
         _originalsFile = originalsFile;
+        _ambient = ambient;
         _time = time;
         _log = log.ForContext<ComfortController>();
         _fullscreen = new SettledValue<string?>(null, FullscreenSettle, time);
@@ -79,6 +83,7 @@ internal sealed class ComfortController : IAsyncDisposable
 
         _originals = loaded.Value;
         _settings.Changed += OnSettingsChanged;
+        _ambient.ReadingChanged += OnSettingsChanged;
     }
 
     /// <summary>Raised on the background loop; UI subscribers marshal to their own thread.</summary>
@@ -105,6 +110,8 @@ internal sealed class ComfortController : IAsyncDisposable
             }
         }
     }
+
+    public bool IsPaused => PausedUntil is { } until && _time.GetUtcNow() < until;
 
     public void Start() => _loop = Task.Run(() => RunAsync(_stop.Token));
 
@@ -134,6 +141,7 @@ internal sealed class ComfortController : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _settings.Changed -= OnSettingsChanged;
+        _ambient.ReadingChanged -= OnSettingsChanged;
         await _stop.CancelAsync();
         try
         {
@@ -223,7 +231,8 @@ internal sealed class ComfortController : IAsyncDisposable
             CaptureOriginals(monitors, now);
 
             var fullscreenId = monitors.FirstOrDefault(m => m.DeviceName == _fullscreen.Current)?.Id;
-            var plan = ComfortPlanner.Plan(now, TimeZoneInfo.Local, settings, location, [.. monitors.Select(m => m.Id)], fullscreenId);
+            var plan = ComfortPlanner.Plan(
+                now, TimeZoneInfo.Local, settings, location, [.. monitors.Select(m => m.Id)], fullscreenId, _ambient.Latest);
             foreach (var target in plan.Targets)
             {
                 var monitor = monitors.First(m => m.Id == target.MonitorId);

@@ -111,6 +111,42 @@ internal static unsafe partial class NativeMethods
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     public static partial int SHQueryUserNotificationState(int* state);
 
+    public struct LastInputInfo
+    {
+        public uint Size;
+        public uint Time;
+    }
+
+    [LibraryImport("user32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetLastInputInfo(LastInputInfo* info);
+
+    // Media Foundation. Interface pointers are passed as raw IUnknown pointers and wrapped by the caller.
+    [LibraryImport("mfplat.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial int MFStartup(uint version, uint flags);
+
+    [LibraryImport("mfplat.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial int MFCreateAttributes(nint* attributes, uint initialSize);
+
+    [LibraryImport("mfplat.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial int MFCreateMediaType(nint* mediaType);
+
+    [LibraryImport("mf.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial int MFEnumDeviceSources(nint attributes, nint* activates, uint* count);
+
+    [LibraryImport("mfreadwrite.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial int MFCreateSourceReaderFromMediaSource(nint source, nint attributes, nint* reader);
+
+    [LibraryImport("ole32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial void CoTaskMemFree(nint memory);
+
     [LibraryImport("dxva2.dll")]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]

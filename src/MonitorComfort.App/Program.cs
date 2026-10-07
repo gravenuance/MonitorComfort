@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Avalonia;
 using MonitorComfort.App.Services;
@@ -43,6 +44,11 @@ internal static class Program
                 return 0;
             }
 
+            if (TryRunLightCommand(App.Host, args, log) is { } lightExitCode)
+            {
+                return lightExitCode;
+            }
+
             var exitCode = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
             log.Information("MonitorComfort exited with code {ExitCode}", exitCode);
             return exitCode;
@@ -65,6 +71,35 @@ internal static class Program
 
             Log.CloseAndFlush();
         }
+    }
+
+    // Diagnostics for the webcam light meter; results go to the log, as the app has no console.
+    private static int? TryRunLightCommand(AppHost host, string[] args, ILogger log)
+    {
+#pragma warning disable CA2025 // One-shot commands before any UI exists; no synchronization context to deadlock.
+        if (args.Contains("--measure-light", StringComparer.OrdinalIgnoreCase))
+        {
+            var reading = Task.Run(() => host.Ambient.MeasureNowAsync(CancellationToken.None)).GetAwaiter().GetResult();
+            log.Information("Measure light: {Reading} {Error}", reading, host.Ambient.LastError);
+            return reading is null ? 1 : 0;
+        }
+
+        var index = Array.FindIndex(args, a => a.Equals("--calibrate-light", StringComparison.OrdinalIgnoreCase));
+        if (index >= 0)
+        {
+            if (index + 1 >= args.Length || !int.TryParse(args[index + 1], CultureInfo.InvariantCulture, out var brightness) || brightness is < 0 or > 100)
+            {
+                log.Error("--calibrate-light needs the comfortable brightness now, 0-100");
+                return 2;
+            }
+
+            var error = Task.Run(() => host.Ambient.CalibrateAsync(brightness, null, CancellationToken.None)).GetAwaiter().GetResult();
+            log.Information("Calibrate light at {Brightness}%: {Result}", brightness, error ?? "done");
+            return error is null ? 0 : 1;
+        }
+#pragma warning restore CA2025
+
+        return null;
     }
 
     // Also used by the Avalonia design-time tooling.
