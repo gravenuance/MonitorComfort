@@ -25,7 +25,7 @@ internal sealed class AmbientLightService : IAsyncDisposable
     private readonly CancellationTokenSource _stop = new();
     private Task _loop = Task.CompletedTask;
     private AmbientReading? _latest;
-    private DateTimeOffset _lastAttempt = DateTimeOffset.MinValue;
+    private long _lastAttemptTicks = DateTimeOffset.MinValue.UtcTicks;
 
     public AmbientLightService(SettingsService settings, CameraLightMeter meter, TimeProvider time, ILogger log, Func<bool> isPaused)
     {
@@ -48,7 +48,7 @@ internal sealed class AmbientLightService : IAsyncDisposable
     /// <summary>Takes a reading now; null with <see cref="LastError"/> set when it couldn't.</summary>
     public async Task<AmbientReading?> MeasureNowAsync(CancellationToken cancellationToken)
     {
-        _lastAttempt = _time.GetUtcNow();
+        Interlocked.Exchange(ref _lastAttemptTicks, _time.GetUtcNow().UtcTicks);
         var response = _settings.Current.CameraLight.Response;
         if (response is null)
         {
@@ -163,7 +163,8 @@ internal sealed class AmbientLightService : IAsyncDisposable
             try
             {
                 var camera = _settings.Current.CameraLight;
-                var due = _time.GetUtcNow() - _lastAttempt >= TimeSpan.FromMinutes(camera.IntervalMinutes);
+                var lastAttempt = new DateTimeOffset(Interlocked.Read(ref _lastAttemptTicks), TimeSpan.Zero);
+                var due = _time.GetUtcNow() - lastAttempt >= TimeSpan.FromMinutes(camera.IntervalMinutes);
                 if (camera.IsReady && due && !_isPaused() && !UserIsIdle())
                 {
                     await MeasureNowAsync(cancellationToken);

@@ -51,6 +51,11 @@ internal sealed class CameraLightMeter : IDisposable
                 },
                 cancellationToken);
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _log.Warning(ex, "Could not {Action} the camera: access denied", action);
+            return new MeterResult<T>(null, "Camera access is off in Windows privacy settings.");
+        }
         catch (Exception ex) when (ex is COMException or CameraException)
         {
             _log.Warning(ex, "Could not {Action} the camera (HRESULT 0x{HResult:X8}); it may be in use", action, ex.HResult);

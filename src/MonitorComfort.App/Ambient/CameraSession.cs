@@ -169,17 +169,40 @@ internal sealed class CameraSession : IDisposable
         }
 
         _disposed = true;
-        _camera.Set(MediaFoundation.Exposure, _exposure.Value, _exposure.Flags);
-        _picture.Set(MediaFoundation.Gain, _gain.Value, _gain.Flags);
-        if (_whiteBalance is { } whiteBalance)
+        try
         {
-            _picture.Set(MediaFoundation.WhiteBalance, whiteBalance.Value, whiteBalance.Flags);
+            _camera.Set(MediaFoundation.Exposure, _exposure.Value, _exposure.Flags);
+            _picture.Set(MediaFoundation.Gain, _gain.Value, _gain.Flags);
+            if (_whiteBalance is { } whiteBalance)
+            {
+                _picture.Set(MediaFoundation.WhiteBalance, whiteBalance.Value, whiteBalance.Flags);
+            }
+        }
+        finally
+        {
+            Release(_reader, _source, _activate);
+        }
+    }
+
+    // Shuts the device down and frees the wrappers; a failing shutdown must not leak the rest or hide the original error.
+    private static void Release(object? reader, object? source, IMFActivate activate)
+    {
+        try
+        {
+            activate.ShutdownObject();
+        }
+        catch (COMException)
+        {
+            // The device is gone or already shut down; the wrappers below still need releasing.
         }
 
-        Marshal.ReleaseComObject(_reader);
-        _activate.ShutdownObject();
-        Marshal.ReleaseComObject(_source);
-        Marshal.ReleaseComObject(_activate);
+        foreach (var wrapper in new[] { reader, source, activate })
+        {
+            if (wrapper is not null)
+            {
+                Marshal.ReleaseComObject(wrapper);
+            }
+        }
     }
 
     private static unsafe CameraSession Open(IMFActivate activate)
@@ -187,12 +210,22 @@ internal sealed class CameraSession : IDisposable
         var friendlyName = MediaFoundation.FriendlyName;
         var name = activate.GetAllocatedString(ref friendlyName, out var value, out _) >= 0 ? value : "camera";
         var sourceId = MediaFoundation.MediaSource;
-        activate.ActivateObject(ref sourceId, out var source);
+        object source;
+        try
+        {
+            activate.ActivateObject(ref sourceId, out source);
+        }
+        catch
+        {
+            Release(null, null, activate);
+            throw;
+        }
 
         var readerAttributes = CreateAttributes();
         var output = CreateMediaType();
         var sourcePointer = Marshal.GetIUnknownForObject(source);
         var attributesPointer = Marshal.GetIUnknownForObject(readerAttributes);
+        IMFSourceReader? reader = null;
         try
         {
             var processing = MediaFoundation.EnableVideoProcessing;
@@ -200,7 +233,7 @@ internal sealed class CameraSession : IDisposable
 
             nint readerPointer;
             Check(NativeMethods.MFCreateSourceReaderFromMediaSource(sourcePointer, attributesPointer, &readerPointer), "open camera stream");
-            var reader = (IMFSourceReader)Marshal.GetObjectForIUnknown(readerPointer);
+            reader = (IMFSourceReader)Marshal.GetObjectForIUnknown(readerPointer);
             Marshal.Release(readerPointer);
 
             // Small RGB frames: plenty for an average, and cheap to scan.
@@ -218,7 +251,7 @@ internal sealed class CameraSession : IDisposable
         }
         catch
         {
-            activate.ShutdownObject();
+            Release(reader, source, activate);
             throw;
         }
         finally
@@ -239,7 +272,7 @@ internal sealed class CameraSession : IDisposable
         }
 
         var clock = Stopwatch.StartNew();
-        (int, int, int?) last = (int.MinValue, int.MinValue, null);
+        (int, int, int?)? last = null;
         var stableSince = TimeSpan.Zero;
         while (clock.Elapsed < SettleTimeout)
         {
@@ -256,15 +289,17 @@ internal sealed class CameraSession : IDisposable
             }
         }
 
-        return last;
+        return last ?? throw new TimeoutException("The camera delivered no frames.");
     }
 
-    private int? WhiteBalanceNow() => _whiteBalance is null ? null : Value(_picture.Get, MediaFoundation.WhiteBalance);
+    private int? WhiteBalanceNow()
+        => _whiteBalance is not null && _picture.Get(MediaFoundation.WhiteBalance, out var value, out _) >= 0 ? value : null;
 
+    // A rejected write would leave automatic exposure running under a reading that assumes it locked.
     private void Lock(int exposure, int gain)
     {
-        _camera.Set(MediaFoundation.Exposure, exposure, MediaFoundation.ManualFlag);
-        _picture.Set(MediaFoundation.Gain, gain, MediaFoundation.ManualFlag);
+        Check(_camera.Set(MediaFoundation.Exposure, exposure, MediaFoundation.ManualFlag), "lock the exposure");
+        Check(_picture.Set(MediaFoundation.Gain, gain, MediaFoundation.ManualFlag), "lock the gain");
     }
 
     private double MeanLinearY(int frames, CancellationToken cancellationToken)
@@ -341,7 +376,11 @@ internal sealed class CameraSession : IDisposable
     private static (int Value, int Flags)? Get(ControlGet get, int property)
         => get(property, out var value, out var flags) >= 0 ? (value, flags) : null;
 
-    private static int Value(ControlGet get, int property) => get(property, out var value, out _) >= 0 ? value : int.MinValue;
+    private static int Value(ControlGet get, int property)
+    {
+        Check(get(property, out var value, out _), "read a camera setting");
+        return value;
+    }
 
     private static (int Min, int Max) Range(ControlRange range, int property)
     {

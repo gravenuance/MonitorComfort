@@ -228,6 +228,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (e.PropertyName is nameof(CameraEnabled))
+        {
+            _settings.Update(s => s with { CameraLight = s.CameraLight with { Enabled = CameraEnabled } });
+            return;
+        }
+
         if (e.PropertyName is nameof(ComfortableBrightness))
         {
             _previewing = true;
@@ -317,7 +323,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
                     OtherMonitorBrightnessPercent = (int)Math.Round(OtherMonitorPercent),
                 },
                 StartWithWindows = StartWithWindows,
-                CameraLight = current.CameraLight with { Enabled = CameraEnabled },
             };
         });
     }

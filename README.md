@@ -41,6 +41,9 @@ The camera light comes on for about 3 seconds per reading. No image is saved or 
 light level and colour are logged. Readings are skipped while the app is paused, after 15
 minutes without keyboard or mouse input, and while another app (such as a video call) is using
 the camera. `MonitorComfort.exe --measure-light` takes one reading and writes it to the log.
+In a dark room the camera mostly sees light from the screens, so their brightness feeds back
+into the reading. The adjustment settles rather than running away, but it may settle a little
+off the calibrated level; calibrating with the room lit as usual keeps this small.
 See `docs/adr/0002-webcam-as-light-meter.md` for how it works.
 
 ## Build and test
