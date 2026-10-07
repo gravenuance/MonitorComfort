@@ -94,7 +94,11 @@ public sealed class VersionedJsonFile<T>
 
         try
         {
-            var value = root.Deserialize(_typeInfo);
+            // Source-generated binding assigns every init-only property, so a field absent from
+            // the file would become null or zero; laying the file over the defaults keeps them.
+            var merged = JsonSerializer.SerializeToNode(_createDefault(), _typeInfo)!.AsObject();
+            MergeInto(merged, root);
+            var value = merged.Deserialize(_typeInfo);
             return value is null ? Unusable("is empty") : new LoadResult<T>(value, problem, Existed: true);
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException)
@@ -116,6 +120,21 @@ public sealed class VersionedJsonFile<T>
         var temp = Path + ".tmp";
         File.WriteAllText(temp, JsonSerializer.Serialize(value, _typeInfo));
         File.Move(temp, Path, overwrite: true);
+    }
+
+    private static void MergeInto(JsonObject target, JsonObject source)
+    {
+        foreach (var (name, value) in source.ToList())
+        {
+            if (value is JsonObject sourceChild && target[name] is JsonObject targetChild)
+            {
+                MergeInto(targetChild, sourceChild);
+            }
+            else
+            {
+                target[name] = value?.DeepClone();
+            }
+        }
     }
 
     private LoadResult<T> Unusable(string reason)

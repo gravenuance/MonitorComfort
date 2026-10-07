@@ -86,6 +86,21 @@ public sealed class SettingsFileTests : IDisposable
     }
 
     [Fact]
+    public void Fields_missing_from_the_file_keep_their_defaults()
+    {
+        File.WriteAllText(SettingsPath, """{ "schemaVersion": 1, "day": { "brightness": 70, "kelvin": 6000 }, "roomLight": { "level": "Dim" } }""");
+
+        var loaded = SettingsFiles.Settings(_directory).Load().Value;
+
+        Assert.Equal(new TimeOnly(22, 30), loaded.NightStart);
+        Assert.Equal(new TimeOnly(7, 0), loaded.NightEnd);
+        Assert.Equal(new DisplayProfile(35, 4500), loaded.Evening);
+        Assert.True(loaded.StartWithWindows);
+        Assert.True(loaded.Fullscreen.DimOtherMonitors);
+        Assert.Equal(new RoomLightSettings { Level = LightLevel.Dim }, loaded.RoomLight);
+    }
+
+    [Fact]
     public void Out_of_range_location_is_reported_not_thrown()
     {
         File.WriteAllText(SettingsPath, """{ "schemaVersion": 1, "location": { "latitude": 200, "longitude": 0 } }""");
