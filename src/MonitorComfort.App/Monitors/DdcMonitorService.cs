@@ -30,21 +30,24 @@ internal sealed class DdcMonitorService
         return monitors;
     }
 
+    /// <summary>A failed read isn't cached: monitors still waking up after sign-in often don't answer yet.</summary>
     public Capabilities CapabilitiesOf(DdcMonitor monitor)
     {
         ArgumentNullException.ThrowIfNull(monitor);
-        return _capabilities.GetOrAdd(monitor.Id, _ =>
+        if (_capabilities.TryGetValue(monitor.Id, out var cached))
         {
-            var text = monitor.ReadCapabilities();
-            if (text is null)
-            {
-                _log.Warning("Monitor {MonitorId} ({Name}) returned no DDC/CI capabilities", monitor.Id, monitor.Name);
-                return Capabilities.None;
-            }
+            return cached;
+        }
 
-            _log.Information("Monitor {MonitorId} ({Name}) capabilities {Capabilities}", monitor.Id, monitor.Name, text);
-            return Capabilities.Parse(text);
-        });
+        var text = monitor.ReadCapabilities();
+        if (text is null)
+        {
+            _log.Warning("Monitor {MonitorId} ({Name}) returned no DDC/CI capabilities; will retry", monitor.Id, monitor.Name);
+            return Capabilities.None;
+        }
+
+        _log.Information("Monitor {MonitorId} ({Name}) capabilities {Capabilities}", monitor.Id, monitor.Name, text);
+        return _capabilities.GetOrAdd(monitor.Id, Capabilities.Parse(text));
     }
 
     private unsafe void AddPhysicalMonitors(nint hmonitor, List<DdcMonitor> monitors)
@@ -132,6 +135,7 @@ internal sealed class DdcMonitorService
     [UnmanagedCallersOnly]
     private static int CollectMonitor(nint hmonitor, nint hdc, nint rect, nint data)
     {
+        // The handle wraps the live list allocated in DisplayMonitorHandles and is freed only after the enumeration.
         ((List<nint>)GCHandle.FromIntPtr(data).Target!).Add(hmonitor);
         return 1;
     }

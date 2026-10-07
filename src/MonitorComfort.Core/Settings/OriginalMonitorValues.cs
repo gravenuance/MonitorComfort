@@ -18,6 +18,11 @@ public sealed record MonitorSnapshot
     public int? GreenGain { get; init; }
 
     public int? BlueGain { get; init; }
+
+    /// <summary>Whether enough was read to put the monitor back; a monitor still waking answers only some reads.</summary>
+    public bool IsComplete
+        => Brightness is not null
+            && (ColourPreset, RedGain, GreenGain, BlueGain) is (not null, not null, not null, not null) or (null, null, null, null);
 }
 
 public sealed record OriginalMonitorValues
@@ -31,10 +36,15 @@ public sealed record OriginalMonitorValues
     public MonitorSnapshot? Find(string monitorId)
         => Monitors.FirstOrDefault(m => string.Equals(m.MonitorId, monitorId, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Adds a snapshot only for a monitor not captured before, so the first values are never overwritten.</summary>
+    /// <summary>
+    /// Adds a complete snapshot for a monitor not captured before, so the first values are never
+    /// overwritten and a partial read is retried rather than kept.
+    /// </summary>
     public OriginalMonitorValues WithFirstCapture(MonitorSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        return Find(snapshot.MonitorId) is not null ? this : this with { Monitors = [.. Monitors, snapshot] };
+        return !snapshot.IsComplete || Find(snapshot.MonitorId) is not null
+            ? this
+            : this with { Monitors = [.. Monitors, snapshot] };
     }
 }

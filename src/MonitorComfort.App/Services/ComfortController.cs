@@ -227,6 +227,12 @@ internal sealed class ComfortController : IAsyncDisposable
             foreach (var target in plan.Targets)
             {
                 var monitor = monitors.First(m => m.Id == target.MonitorId);
+                if (_originals.Find(monitor.Id) is null)
+                {
+                    _log.Warning("Leaving {MonitorId} alone until its original settings can be read", monitor.Id);
+                    continue;
+                }
+
                 await ApplyTargetAsync(monitor, target, settings.ForMonitor(monitor.Id), cancellationToken);
             }
 
@@ -322,7 +328,7 @@ internal sealed class ComfortController : IAsyncDisposable
         var updated = _originals;
         foreach (var monitor in monitors.Where(m => _originals.Find(m.Id) is null))
         {
-            updated = updated.WithFirstCapture(new MonitorSnapshot
+            var snapshot = new MonitorSnapshot
             {
                 MonitorId = monitor.Id,
                 Name = monitor.Name,
@@ -332,8 +338,12 @@ internal sealed class ComfortController : IAsyncDisposable
                 RedGain = monitor.Read(VcpCode.RedGain),
                 GreenGain = monitor.Read(VcpCode.GreenGain),
                 BlueGain = monitor.Read(VcpCode.BlueGain),
-            });
-            _log.Information("Captured original settings of {MonitorId} ({Name})", monitor.Id, monitor.Name);
+            };
+            updated = updated.WithFirstCapture(snapshot);
+            if (snapshot.IsComplete)
+            {
+                _log.Information("Captured original settings of {MonitorId} ({Name})", monitor.Id, monitor.Name);
+            }
         }
 
         if (ReferenceEquals(updated, _originals))
@@ -341,7 +351,7 @@ internal sealed class ComfortController : IAsyncDisposable
             return;
         }
 
-        // Without a saved copy there is nothing to restore later, so stop rather than change the monitor.
+        // If this throws, no monitor is changed this cycle: without a saved copy nothing could be restored.
         _originalsFile.Save(updated);
         _originals = updated;
     }

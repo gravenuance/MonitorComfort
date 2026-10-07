@@ -89,6 +89,28 @@ internal static unsafe partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsIconic(nint window);
 
+    public const uint MonitorInfoPrimary = 1;
+    public const int ExtendedStyleIndex = -20;
+    public const uint DwmCloaked = 14;
+
+    [LibraryImport("user32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsWindowVisible(nint window);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial nint GetWindowLongPtr(nint window, int index);
+
+    [LibraryImport("dwmapi.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial int DwmGetWindowAttribute(nint window, uint attribute, int* value, int size);
+
+    /// <summary>The shell's own "an app is full-screen" signal (as Focus Assist uses); primary monitor only.</summary>
+    [LibraryImport("shell32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial int SHQueryUserNotificationState(int* state);
+
     [LibraryImport("dxva2.dll")]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]

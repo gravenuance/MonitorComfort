@@ -15,6 +15,9 @@ internal sealed class SettingsService : IDisposable
     private readonly ILogger _log;
     private readonly ITimer _saveTimer;
     private readonly Lock _gate = new();
+
+    // Serialises file writes: the debounce timer and Dispose can both flush.
+    private readonly Lock _saveGate = new();
     private ComfortSettings _current;
     private bool _dirty;
 
@@ -40,6 +43,10 @@ internal sealed class SettingsService : IDisposable
         _current = normalized;
         IsFirstRun = !loaded.Existed;
         _saveTimer = time.CreateTimer(_ => Flush(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+
+        // Saving the defaults straight away makes the next start a normal one, not another first run.
+        _dirty = IsFirstRun;
+        Flush();
     }
 
     public event EventHandler? Changed;
@@ -77,6 +84,14 @@ internal sealed class SettingsService : IDisposable
     }
 
     public void Flush()
+    {
+        lock (_saveGate)
+        {
+            FlushCore();
+        }
+    }
+
+    private void FlushCore()
     {
         ComfortSettings snapshot;
         lock (_gate)

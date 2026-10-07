@@ -5,11 +5,48 @@ namespace MonitorComfort.Core.Context;
 /// <summary>A screen rectangle in physical pixels; right and bottom are exclusive.</summary>
 public readonly record struct PixelRect(int Left, int Top, int Right, int Bottom);
 
+/// <summary>What the detector knows about the foreground window and the monitor it is on.</summary>
+public sealed record FullscreenCandidate(
+    PixelRect Window,
+    PixelRect Monitor,
+    string WindowClass,
+    bool Visible,
+    bool Cloaked,
+    int ExtendedStyle,
+    bool OnPrimaryMonitor,
+    bool ShellReportsFullscreen);
+
 public static class FullscreenRule
 {
-    // The desktop and taskbar span a whole monitor but are not full-screen content.
+    // Overlays and helper windows: tool windows, windows that never take focus, click-through layers.
+    private const int OverlayStyles = 0x80 | 0x08000000 | 0x20;
+
+    // Desktop, taskbars and shell surfaces (Start, Search, flyouts, lock screen, Alt+Tab, Task View)
+    // can briefly own focus at monitor size but are not full-screen content.
     private static readonly FrozenSet<string> ShellWindowClasses = FrozenSet.Create(
-        StringComparer.Ordinal, "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd");
+        StringComparer.Ordinal,
+        "Progman",
+        "WorkerW",
+        "Shell_TrayWnd",
+        "Shell_SecondaryTrayWnd",
+        "Windows.UI.Core.CoreWindow",
+        "XamlExplorerHostIslandWindow",
+        "MultitaskingViewFrame",
+        "ForegroundStaging");
+
+    /// <summary>
+    /// On the primary monitor Windows' own full-screen signal must agree; Windows doesn't give
+    /// that signal for other monitors, so there the window checks stand alone.
+    /// </summary>
+    public static bool IsFullscreen(FullscreenCandidate candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        return candidate.Visible
+            && !candidate.Cloaked
+            && (candidate.ExtendedStyle & OverlayStyles) == 0
+            && Covers(candidate.Window, candidate.Monitor, candidate.WindowClass)
+            && (!candidate.OnPrimaryMonitor || candidate.ShellReportsFullscreen);
+    }
 
     public static bool Covers(PixelRect window, PixelRect monitor, string windowClass)
         => !ShellWindowClasses.Contains(windowClass)

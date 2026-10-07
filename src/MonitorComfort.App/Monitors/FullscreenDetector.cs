@@ -39,10 +39,26 @@ internal sealed class FullscreenDetector
 
         var bounds = new PixelRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
         var windowClass = new string(className, 0, Math.Max(length, 0));
-        var monitor = new PixelRect(info.Monitor.Left, info.Monitor.Top, info.Monitor.Right, info.Monitor.Bottom);
-        return FullscreenRule.Covers(bounds, monitor, windowClass)
+        int cloaked;
+        var candidate = new FullscreenCandidate(
+            bounds,
+            new PixelRect(info.Monitor.Left, info.Monitor.Top, info.Monitor.Right, info.Monitor.Bottom),
+            windowClass,
+            NativeMethods.IsWindowVisible(window),
+            NativeMethods.DwmGetWindowAttribute(window, NativeMethods.DwmCloaked, &cloaked, sizeof(int)) == 0 && cloaked != 0,
+            (int)NativeMethods.GetWindowLongPtr(window, NativeMethods.ExtendedStyleIndex),
+            (info.Flags & NativeMethods.MonitorInfoPrimary) != 0,
+            ShellReportsFullscreen());
+        return FullscreenRule.IsFullscreen(candidate)
             ? new FullscreenWindow(new string(info.Device), windowClass, ProcessName(processId), bounds)
             : null;
+    }
+
+    // QUNS_BUSY, QUNS_RUNNING_D3D_FULL_SCREEN or QUNS_PRESENTATION_MODE.
+    private static unsafe bool ShellReportsFullscreen()
+    {
+        int state;
+        return NativeMethods.SHQueryUserNotificationState(&state) == 0 && state is 2 or 3 or 4;
     }
 
     private static string ProcessName(uint processId)
