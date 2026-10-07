@@ -67,14 +67,19 @@ internal sealed class AmbientLightService : IAsyncDisposable
     }
 
     /// <summary>
-    /// Measures the camera's response the first time, then records the current light as the level
-    /// at which <paramref name="comfortableBrightness"/> feels right. Returns an error message or null.
+    /// Measures the camera's response the first time, then records the current light as the
+    /// <paramref name="level"/> point at which <paramref name="comfortableBrightness"/> feels right.
+    /// Returns an error message or null.
     /// </summary>
-    public async Task<string?> CalibrateAsync(int comfortableBrightness, IProgress<string>? progress, CancellationToken cancellationToken)
+    public async Task<string?> CalibrateAsync(
+        CalibrationLevel level, int comfortableBrightness, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         var response = _settings.Current.CameraLight.Response;
+        var existing = _settings.Current.CameraLight.Calibration ?? AmbientCalibration.Empty;
         if (response is null)
         {
+            // Points measured against an earlier response sit on a different scale.
+            existing = AmbientCalibration.Empty;
             progress?.Report("Measuring the camera…");
             var sweep = await _meter.SweepAsync(cancellationToken);
             if (sweep.Value is not { } sweeps)
@@ -107,12 +112,18 @@ internal sealed class AmbientLightService : IAsyncDisposable
             return LastError;
         }
 
-        var calibration = new AmbientCalibration(reading.LightStops, comfortableBrightness);
+        var (calibration, error) = existing.With(level, new CalibrationPoint(reading.LightStops, comfortableBrightness));
+        if (calibration is null)
+        {
+            _log.Information("Rejected the {Level} calibration at {Stops:0.00} stops and {Brightness}%: {Error}", level, reading.LightStops, comfortableBrightness, error);
+            return error;
+        }
+
         _settings.Update(s => s with
         {
             CameraLight = s.CameraLight with { Enabled = true, Response = response, Calibration = calibration },
         });
-        _log.Information("Calibrated the light meter: {Calibration}", calibration);
+        _log.Information("Calibrated the light meter ({Level}): {Calibration}", level, calibration);
         ReadingChanged?.Invoke(this, EventArgs.Empty);
         return null;
     }

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MonitorComfort.Core.Settings;
 
 /// <summary>A monitor's own settings captured before this app first changed them.</summary>
@@ -20,6 +22,7 @@ public sealed record MonitorSnapshot
     public int? BlueGain { get; init; }
 
     /// <summary>Whether enough was read to put the monitor back; a monitor still waking answers only some reads.</summary>
+    [JsonIgnore]
     public bool IsComplete
         => Brightness is not null
             && (ColourPreset, RedGain, GreenGain, BlueGain) is (not null, not null, not null, not null) or (null, null, null, null);

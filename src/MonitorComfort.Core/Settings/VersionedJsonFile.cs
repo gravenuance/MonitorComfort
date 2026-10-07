@@ -4,8 +4,11 @@ using System.Text.Json.Serialization.Metadata;
 
 namespace MonitorComfort.Core.Settings;
 
-/// <summary>The loaded value plus a short message when the file was unusable or had to be migrated.</summary>
-public sealed record LoadResult<T>(T Value, string? Problem, bool Existed);
+/// <summary>
+/// The loaded value plus a short message when the file was unusable or had to be migrated.
+/// <paramref name="Migrated"/> means the caller should save, so the upgrade happens once.
+/// </summary>
+public sealed record LoadResult<T>(T Value, string? Problem, bool Existed, bool Migrated = false);
 
 /// <summary>
 /// A JSON file with a <c>schemaVersion</c> field: migrated as a raw JSON tree before binding,
@@ -99,7 +102,9 @@ public sealed class VersionedJsonFile<T>
             var merged = JsonSerializer.SerializeToNode(_createDefault(), _typeInfo)!.AsObject();
             MergeInto(merged, root);
             var value = merged.Deserialize(_typeInfo);
-            return value is null ? Unusable("is empty") : new LoadResult<T>(value, problem, Existed: true);
+            return value is null
+                ? Unusable("is empty")
+                : new LoadResult<T>(value, problem, Existed: true, Migrated: version < _currentVersion);
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException)
         {

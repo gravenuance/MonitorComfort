@@ -108,7 +108,7 @@ public sealed class AmbientLightTests
     [InlineData(20.0, 100)]
     public void Brightness_moves_ten_points_per_stop_from_the_calibration(double stops, int expected)
     {
-        Assert.Equal(expected, AmbientMapping.Brightness(new AmbientCalibration(2.4, 45), stops, 10));
+        Assert.Equal(expected, AmbientMapping.Brightness(new AmbientCalibration(new CalibrationPoint(2.4, 45), null), stops, 10));
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public sealed class AmbientLightTests
     [Fact]
     public void Colour_is_trusted_only_within_three_stops_of_the_calibration_light()
     {
-        var calibration = new AmbientCalibration(2.4, 45);
+        var calibration = new AmbientCalibration(new CalibrationPoint(2.4, 45), null);
 
         Assert.Equal(4000, AmbientMapping.ReliableKelvin(calibration, new AmbientReading(DateTimeOffset.UnixEpoch, -0.6, 4000)));
         Assert.Null(AmbientMapping.ReliableKelvin(calibration, new AmbientReading(DateTimeOffset.UnixEpoch, -0.7, 4000)));
@@ -143,7 +143,7 @@ public sealed class AmbientPlanningTests
     private static readonly ComfortSettings Calibrated = new()
     {
         Location = Stockholm,
-        CameraLight = new CameraLightSettings { Enabled = true, Response = AmbientLightTests.Response, Calibration = new AmbientCalibration(2.4, 45) },
+        CameraLight = new CameraLightSettings { Enabled = true, Response = AmbientLightTests.Response, Calibration = new AmbientCalibration(new CalibrationPoint(2.4, 45), null) },
     };
 
     private static ComfortPlan Plan(ComfortSettings settings, AmbientReading? reading, string? fullscreen = null)
@@ -223,7 +223,7 @@ public sealed class AmbientPlanningTests
             var loaded = file.Load().Value.CameraLight;
 
             Assert.True(loaded.IsReady);
-            Assert.Equal(new AmbientCalibration(2.4, 45), loaded.Calibration);
+            Assert.Equal(new AmbientCalibration(new CalibrationPoint(2.4, 45), null), loaded.Calibration);
             Assert.Equal(1.25, loaded.Response!.Gamma);
             Assert.Equal(AmbientLightTests.Response.GainCurve, loaded.Response.GainCurve);
         }

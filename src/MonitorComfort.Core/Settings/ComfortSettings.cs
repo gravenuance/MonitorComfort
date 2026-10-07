@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Text.Json.Serialization;
 using MonitorComfort.Core.Ambient;
 using MonitorComfort.Core.Colour;
 using MonitorComfort.Core.Solar;
@@ -51,14 +52,15 @@ public sealed record CameraLightSettings
 
     public int IntervalMinutes { get; init; } = 10;
 
-    /// <summary>Brightness change for each doubling or halving of the room light.</summary>
+    /// <summary>Brightness change per doubling or halving of the light while only one level is calibrated.</summary>
     public double BrightnessPerStop { get; init; } = 10;
 
     public CameraResponse? Response { get; init; }
 
     public AmbientCalibration? Calibration { get; init; }
 
-    public bool IsReady => Enabled && Response is not null && Calibration is not null;
+    [JsonIgnore]
+    public bool IsReady => Enabled && Response is not null && Calibration is { HasAnyPoint: true };
 }
 
 public sealed record FullscreenSettings
@@ -84,7 +86,8 @@ public sealed record MonitorSettings
 
 public sealed record ComfortSettings
 {
-    public const int CurrentSchemaVersion = 1;
+    /// <summary>2: the camera calibration holds a bright and a dim point.</summary>
+    public const int CurrentSchemaVersion = 2;
 
     private readonly FrozenDictionary<string, MonitorSettings> _monitors =
         FrozenDictionary<string, MonitorSettings>.Empty;
@@ -196,7 +199,7 @@ public sealed record ComfortSettings
             CameraLight = cameraLight with
             {
                 IntervalMinutes = Clamp("Camera interval", cameraLight.IntervalMinutes, 5, 60),
-                BrightnessPerStop = Math.Clamp(cameraLight.BrightnessPerStop, 2, 30),
+                BrightnessPerStop = Math.Clamp(cameraLight.BrightnessPerStop, 2, 60),
             },
             Monitors = monitors,
         };

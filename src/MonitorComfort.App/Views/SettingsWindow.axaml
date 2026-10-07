@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MonitorComfort.App.ViewModels"
+        xmlns:ambient="using:MonitorComfort.Core.Ambient"
         x:Class="MonitorComfort.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="MonitorComfort"
@@ -139,8 +140,10 @@
               <ToggleSwitch Grid.Column="1" IsChecked="{Binding CameraEnabled}" OnContent="" OffContent=""
                             AutomationProperties.Name="Camera light meter" />
             </Grid>
+            <TextBlock Classes="hint" Text="{Binding CalibrationSummary}" AutomationProperties.Name="Calibration" />
             <TextBlock Classes="hint" Text="{Binding CameraStatus}" AutomationProperties.LiveSetting="Polite"
-                       AutomationProperties.Name="Camera light meter status" />
+                       AutomationProperties.Name="Camera light meter status"
+                       IsVisible="{Binding CameraStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             <Grid ColumnDefinitions="Auto,*,56" ColumnSpacing="{StaticResource ColumnSpacing}">
               <TextBlock Classes="label" Text="Comfortable now" />
               <Slider Grid.Column="1" Minimum="5" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
@@ -148,12 +151,16 @@
                       AutomationProperties.Name="Brightness that feels comfortable in the current light" />
               <TextBlock Grid.Column="2" Classes="value" Text="{Binding ComfortableBrightness, StringFormat='{}{0:0}%'}" />
             </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="{StaticResource ColumnSpacing}">
-              <Button Content="Calibrate camera" Command="{Binding CalibrateCommand}"
-                      ToolTip.Tip="Keep the room light steady for about 20 seconds" />
+            <WrapPanel ItemSpacing="{StaticResource ColumnSpacing}" LineSpacing="{StaticResource RowSpacing}">
+              <Button Content="Save for bright room" Command="{Binding CalibrateCommand}"
+                      CommandParameter="{x:Static ambient:CalibrationLevel.Bright}"
+                      ToolTip.Tip="With the room lit as usual; keep the light steady" />
+              <Button Content="Save for dim room" Command="{Binding CalibrateCommand}"
+                      CommandParameter="{x:Static ambient:CalibrationLevel.Dim}"
+                      ToolTip.Tip="With the room lights low; keep the light steady" />
               <Button Content="Measure now" Command="{Binding MeasureNowCommand}"
                       ToolTip.Tip="Take a light reading straight away" />
-            </StackPanel>
+            </WrapPanel>
           </StackPanel>
         </Border>
 

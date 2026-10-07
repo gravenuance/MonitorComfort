@@ -44,8 +44,8 @@ internal sealed class SettingsService : IDisposable
         IsFirstRun = !loaded.Existed;
         _saveTimer = time.CreateTimer(_ => Flush(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
 
-        // Saving the defaults straight away makes the next start a normal one, not another first run.
-        _dirty = IsFirstRun;
+        // Saving defaults or an upgraded file straight away makes the next start a normal one.
+        _dirty = IsFirstRun || loaded.Migrated;
         Flush();
     }
 

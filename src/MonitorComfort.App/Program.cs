@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using Avalonia;
 using MonitorComfort.App.Services;
+using MonitorComfort.Core.Ambient;
 using Serilog;
 
 namespace MonitorComfort.App;
@@ -93,8 +94,9 @@ internal static class Program
                 return 2;
             }
 
-            var error = Task.Run(() => host.Ambient.CalibrateAsync(brightness, null, CancellationToken.None)).GetAwaiter().GetResult();
-            log.Information("Calibrate light at {Brightness}%: {Result}", brightness, error ?? "done");
+            var level = args.Contains("--dim", StringComparer.OrdinalIgnoreCase) ? CalibrationLevel.Dim : CalibrationLevel.Bright;
+            var error = Task.Run(() => host.Ambient.CalibrateAsync(level, brightness, null, CancellationToken.None)).GetAwaiter().GetResult();
+            log.Information("Calibrate light ({Level}) at {Brightness}%: {Result}", level, brightness, error ?? "done");
             return error is null ? 0 : 1;
         }
 #pragma warning restore CA2025

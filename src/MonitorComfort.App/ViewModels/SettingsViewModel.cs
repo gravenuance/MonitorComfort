@@ -6,6 +6,7 @@ using MonitorComfort.App.Ambient;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MonitorComfort.App.Services;
+using MonitorComfort.Core.Ambient;
 using MonitorComfort.Core.Planning;
 using MonitorComfort.Core.Settings;
 using MonitorComfort.Core.Solar;
@@ -52,6 +53,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _controller.StatusChanged += OnStatusChanged;
         _ambient.ReadingChanged += OnReadingChanged;
         CameraStatus = DescribeCamera();
+        CalibrationSummary = DescribeCalibration();
     }
 
     public ProfileViewModel Day { get; }
@@ -130,6 +132,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string CameraStatus { get; set; } = "";
 
+    [ObservableProperty]
+    public partial string CalibrationSummary { get; set; } = "";
+
     /// <summary>The brightness that feels right in the current light; previewed on the monitors while changed.</summary>
     [ObservableProperty]
     public partial double ComfortableBrightness { get; set; }
@@ -178,11 +183,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task CalibrateAsync(CancellationToken cancellationToken)
+    private async Task CalibrateAsync(CalibrationLevel level, CancellationToken cancellationToken)
     {
         var brightness = (int)Math.Round(ComfortableBrightness);
         var progress = new Progress<string>(message => CameraStatus = message);
-        var error = await _ambient.CalibrateAsync(brightness, progress, cancellationToken);
+        var error = await _ambient.CalibrateAsync(level, brightness, progress, cancellationToken);
+        CalibrationSummary = DescribeCalibration();
         EndPreview();
         _loading = true;
         try
@@ -223,7 +229,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(e);
         base.OnPropertyChanged(e);
         if (_loading || e.PropertyName is nameof(StatusText) or nameof(NeedsAttention) or nameof(IsPaused)
-            or nameof(LocationMessage) or nameof(SunTimes) or nameof(LightsOffAtTime) or nameof(CameraStatus))
+            or nameof(LocationMessage) or nameof(SunTimes) or nameof(LightsOffAtTime) or nameof(CameraStatus)
+            or nameof(CalibrationSummary))
         {
             return;
         }
@@ -281,7 +288,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             OtherMonitorPercent = settings.Fullscreen.OtherMonitorBrightnessPercent;
             StartWithWindows = settings.StartWithWindows;
             CameraEnabled = settings.CameraLight.Enabled;
-            ComfortableBrightness = settings.CameraLight.Calibration?.ReferenceBrightness ?? settings.Day.Brightness;
+            ComfortableBrightness = settings.CameraLight.Calibration?.Bright?.Brightness ?? settings.Day.Brightness;
         }
         finally
         {
@@ -358,12 +365,24 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         }
     });
 
+    private string DescribeCalibration()
+    {
+        var calibration = _settings.Current.CameraLight.Calibration;
+        return (calibration?.Bright, calibration?.Dim) switch
+        {
+            (null, null) => "Not calibrated yet",
+            ({ } bright, null) => string.Create(CultureInfo.CurrentCulture, $"Bright room {bright.Brightness}% · dim room not set"),
+            (null, { } dim) => string.Create(CultureInfo.CurrentCulture, $"Bright room not set · dim room {dim.Brightness}%"),
+            ({ } bright, { } dim) => string.Create(CultureInfo.CurrentCulture, $"Bright room {bright.Brightness}% · dim room {dim.Brightness}%"),
+        };
+    }
+
     private string DescribeCamera()
     {
         var camera = _settings.Current.CameraLight;
-        if (camera.Calibration is null)
+        if (camera.Calibration is not { HasAnyPoint: true })
         {
-            return "Not calibrated yet";
+            return "";
         }
 
         if (_ambient.LastError is { } error)
@@ -373,7 +392,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
         if (_ambient.Latest is not { } reading)
         {
-            return camera.Enabled ? "First reading within a minute" : "Calibrated";
+            return camera.Enabled ? "First reading within a minute" : "";
         }
 
         var at = TimeZoneInfo.ConvertTime(reading.At, TimeZoneInfo.Local);

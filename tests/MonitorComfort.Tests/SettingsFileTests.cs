@@ -46,6 +46,7 @@ public sealed class SettingsFileTests : IDisposable
         Assert.Equal(settings.RoomLight, loaded.RoomLight);
         Assert.Equal(-20, loaded.ForMonitor("sam08da").BrightnessOffset);
         Assert.False(File.Exists(SettingsPath + ".tmp"));
+        Assert.False(file.Load().Migrated);
     }
 
     [Fact]
