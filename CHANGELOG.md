@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+- Reacts within a second to displays being connected, removed, swapped, woken or rearranged, and retries a new monitor quickly until it answers DDC/CI.
+- Each monitor's row in the settings window shows what it supports: brightness and colour, brightness only, or no DDC/CI answer (its switch is then disabled).
+
+### Changed
+- A monitor that doesn't answer DDC/CI is left alone and logged once, instead of on every cycle.
+
 ## 0.2.0 — 2026-10-07
 
 ### Added

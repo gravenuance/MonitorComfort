@@ -18,7 +18,7 @@ public enum ControllerState
     NoMonitors,
 }
 
-public sealed record DetectedMonitor(string Id, string Name);
+public sealed record DetectedMonitor(string Id, string Name, MonitorSupport Support);
 
 public sealed record ComfortStatus(
     ControllerState State,
@@ -31,12 +31,11 @@ public sealed record ComfortStatus(
 
 /// <summary>
 /// The only code that talks to the monitors: a background loop that watches for full-screen
-/// windows every second and re-plans every minute, or at once when asked.
+/// windows and display changes every second and re-plans every minute, or at once when asked.
 /// </summary>
 internal sealed class ComfortController : IAsyncDisposable
 {
     private static readonly TimeSpan Tick = TimeSpan.FromSeconds(1);
-    private static readonly TimeSpan PlanInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan FullscreenSettle = TimeSpan.FromSeconds(3);
     private const int NoPreview = -1;
 
@@ -50,8 +49,11 @@ internal sealed class ComfortController : IAsyncDisposable
     private readonly SettledValue<string?> _fullscreen;
     private readonly CancellationTokenSource _stop = new();
     private readonly Dictionary<string, MonitorLevels> _lastWritten = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, MonitorSupport> _support = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ReplanSchedule _schedule = new();
 
     private Task _loop = Task.CompletedTask;
+    private string? _topology;
     private OriginalMonitorValues _originals;
     private int _applyRequested;
     private int _previewBrightness = NoPreview;
@@ -179,11 +181,13 @@ internal sealed class ComfortController : IAsyncDisposable
                     await RestoreAsync(cancellationToken);
                 }
 
+                var displaysChanged = DisplaysChanged();
                 var window = _detector.Detect();
                 var fullscreenChanged = _fullscreen.Observe(window?.DeviceName);
                 var requested = Interlocked.Exchange(ref _applyRequested, 0) == 1;
                 var now = _time.GetUtcNow();
-                if (fullscreenChanged || requested || now >= nextPlan)
+                var scheduled = displaysChanged || now >= nextPlan;
+                if (scheduled || fullscreenChanged || requested)
                 {
                     if (fullscreenChanged && window is not null)
                     {
@@ -199,8 +203,11 @@ internal sealed class ComfortController : IAsyncDisposable
                         _log.Information("Full-screen ended");
                     }
 
-                    await ApplyAsync(now, cancellationToken);
-                    nextPlan = now + PlanInterval;
+                    var allAnswered = await ApplyAsync(now, recheckUnanswered: scheduled, cancellationToken);
+                    if (scheduled)
+                    {
+                        nextPlan = now + _schedule.NextDelay(allAnswered);
+                    }
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -211,33 +218,59 @@ internal sealed class ComfortController : IAsyncDisposable
         while (await timer.WaitForNextTickAsync(cancellationToken));
     }
 
-    private async Task ApplyAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    private bool DisplaysChanged()
+    {
+        var topology = DdcMonitorService.Topology();
+        if (topology == _topology)
+        {
+            return false;
+        }
+
+        if (_topology is not null)
+        {
+            _log.Information("Displays changed: {Topology}", topology);
+        }
+
+        _topology = topology;
+
+        // A reconnected monitor may have reset itself, so what was last written no longer describes it.
+        _lastWritten.Clear();
+        _schedule.DisplaysChanged();
+        return true;
+    }
+
+    /// <summary>Returns whether every monitor answered, so the schedule knows whether to retry soon.</summary>
+    private async Task<bool> ApplyAsync(DateTimeOffset now, bool recheckUnanswered, CancellationToken cancellationToken)
     {
         var settings = _settings.Current;
         var monitors = _ddc.Enumerate();
         try
         {
-            var detected = monitors.Select(m => new DetectedMonitor(m.Id, m.Name)).ToList();
+            // Paused or without a location the monitors are left alone, so nothing is retried either.
             if (PausedUntil is { } until && now < until)
             {
-                Publish(new ComfortStatus(ControllerState.Paused, null, detected, until));
-                return;
+                Publish(new ComfortStatus(ControllerState.Paused, null, KnownSupport(monitors), until));
+                return true;
             }
 
             PausedUntil = null;
             if (settings.Location is not { } location)
             {
-                Publish(new ComfortStatus(ControllerState.NeedsLocation, null, detected, null));
-                return;
+                Publish(new ComfortStatus(ControllerState.NeedsLocation, null, KnownSupport(monitors), null));
+                return true;
             }
 
-            if (monitors.Count == 0)
+            var detected = monitors.Select(m => new DetectedMonitor(m.Id, m.Name, CheckSupport(m, recheckUnanswered))).ToList();
+            var adjustable = monitors.Where(m => _support[m.Id] != MonitorSupport.None).ToList();
+            var allAnswered = adjustable.Count == monitors.Count;
+
+            if (adjustable.Count == 0)
             {
                 Publish(new ComfortStatus(ControllerState.NoMonitors, null, detected, null));
-                return;
+                return allAnswered;
             }
 
-            CaptureOriginals(monitors, now);
+            CaptureOriginals(adjustable, now);
 
             var fullscreenId = monitors.FirstOrDefault(m => m.DeviceName == _fullscreen.Current)?.Id;
             var plan = ComfortPlanner.Plan(
@@ -252,16 +285,24 @@ internal sealed class ComfortController : IAsyncDisposable
             foreach (var target in plan.Targets)
             {
                 var monitor = monitors.First(m => m.Id == target.MonitorId);
-                if (_originals.Find(monitor.Id) is null)
+                var support = _support[monitor.Id];
+                if (support == MonitorSupport.None)
                 {
-                    _log.Warning("Leaving {MonitorId} alone until its original settings can be read", monitor.Id);
                     continue;
                 }
 
-                await ApplyTargetAsync(monitor, target, settings.ForMonitor(monitor.Id), cancellationToken);
+                if (_originals.Find(monitor.Id) is null)
+                {
+                    _log.Warning("Leaving {MonitorId} alone until its original settings can be read", monitor.Id);
+                    allAnswered = false;
+                    continue;
+                }
+
+                await ApplyTargetAsync(monitor, support, target, settings.ForMonitor(monitor.Id), cancellationToken);
             }
 
             Publish(new ComfortStatus(ControllerState.Active, plan, detected, null));
+            return allAnswered;
         }
         finally
         {
@@ -272,10 +313,46 @@ internal sealed class ComfortController : IAsyncDisposable
         }
     }
 
-    private async Task ApplyTargetAsync(DdcMonitor monitor, MonitorTarget target, MonitorSettings settings, CancellationToken cancellationToken)
+    private List<DetectedMonitor> KnownSupport(IReadOnlyList<DdcMonitor> monitors)
+        => [.. monitors.Select(m => new DetectedMonitor(m.Id, m.Name, _support.GetValueOrDefault(m.Id, MonitorSupport.Unknown)))];
+
+    // A monitor that didn't answer is asked again only on schedule: each unanswered request waits out a DDC/CI timeout.
+    private MonitorSupport CheckSupport(DdcMonitor monitor, bool recheckUnanswered)
+    {
+        if (!recheckUnanswered && _support.TryGetValue(monitor.Id, out var known) && known == MonitorSupport.None)
+        {
+            return MonitorSupport.None;
+        }
+
+        // Logs only on a change, so a monitor without DDC/CI isn't reported every cycle.
+        var support = _ddc.SupportOf(monitor);
+        if (_support.TryGetValue(monitor.Id, out var previous) && previous == support)
+        {
+            return support;
+        }
+
+        _support[monitor.Id] = support;
+        if (support == MonitorSupport.None)
+        {
+            _log.Warning("{MonitorId} ({Name}) doesn't answer DDC/CI; leaving it alone", monitor.Id, monitor.Name);
+        }
+        else
+        {
+            _log.Information("{MonitorId} ({Name}) supports {Support}", monitor.Id, monitor.Name, support);
+        }
+
+        return support;
+    }
+
+    private async Task ApplyTargetAsync(
+        DdcMonitor monitor,
+        MonitorSupport support,
+        MonitorTarget target,
+        MonitorSettings settings,
+        CancellationToken cancellationToken)
     {
         // Switch preset before reading: the user preset brings its own stored gains.
-        var colour = CanSetColour(_ddc.CapabilitiesOf(monitor)) && await EnsureUserColourPresetAsync(monitor, cancellationToken);
+        var colour = support == MonitorSupport.BrightnessAndColour && await EnsureUserColourPresetAsync(monitor, cancellationToken);
 
         // A monitor that won't answer reads falls back to what was last written, so it isn't rewritten every cycle.
         var current = ReadLevels(monitor) ?? _lastWritten.GetValueOrDefault(monitor.Id);
@@ -311,12 +388,6 @@ internal sealed class ComfortController : IAsyncDisposable
 
         _lastWritten[monitor.Id] = written;
     }
-
-    private static bool CanSetColour(Capabilities capabilities)
-        => capabilities.SupportsValue(VcpCode.ColourPreset, WritePolicy.UserColourPreset)
-            && capabilities.Supports(VcpCode.RedGain)
-            && capabilities.Supports(VcpCode.GreenGain)
-            && capabilities.Supports(VcpCode.BlueGain);
 
     // Gains only take effect in the user colour preset; switch once, if needed.
     private async Task<bool> EnsureUserColourPresetAsync(DdcMonitor monitor, CancellationToken cancellationToken)

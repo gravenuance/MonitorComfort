@@ -19,6 +19,7 @@ Samsung S24B350H; any monitor with DDC/CI enabled in its menu should work.
 | Camera light meter (opt-in) | Every 10 minutes, the webcam's automatic exposure is read back to measure the room light. Brightness follows the line through your bright-room and dim-room calibrations, and warmth stays near the light's colour. This replaces the room-light model while readings are fresh (30 minutes). |
 | Full-screen | After 3 s settled, the other monitors drop to a share of their scheduled brightness (default 20%). |
 | Per monitor | A brightness offset evens out panels; any monitor can be left alone. |
+| Display changes | Within a second of a monitor being connected, removed, swapped, woken or rearranged, the app checks what each monitor supports over DDC/CI and adjusts it. A monitor that doesn't answer yet is retried after about 2, 5, 10 and 20 s, then every minute. The settings window shows each monitor as *Brightness and colour*, *Brightness only*, or not answering DDC/CI. |
 
 Defaults: day 60% / 6500K, evening 35% / 4500K, night 15% / 3400K, night 22:30–07:00,
 neutral 4000K room lights on from sunset to sunrise.

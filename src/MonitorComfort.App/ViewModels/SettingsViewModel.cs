@@ -263,7 +263,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     private void OnChildChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (!_loading)
+        // Name and support come from the controller; saving on them would re-plan on every status.
+        if (!_loading && e.PropertyName is nameof(MonitorViewModel.Enabled) or nameof(MonitorViewModel.BrightnessOffset))
         {
             Push();
         }
@@ -458,10 +459,11 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             if (existing is not null)
             {
                 existing.Name = monitor.Name;
+                existing.Support = monitor.Support;
                 continue;
             }
 
-            var row = new MonitorViewModel(monitor.Id, monitor.Name, _settings.Current.ForMonitor(monitor.Id));
+            var row = new MonitorViewModel(monitor.Id, monitor.Name, monitor.Support, _settings.Current.ForMonitor(monitor.Id));
             row.PropertyChanged += OnChildChanged;
             Monitors.Add(row);
         }

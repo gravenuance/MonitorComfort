@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using MonitorComfort.Core.Monitors;
 using MonitorComfort.Core.Settings;
 
 namespace MonitorComfort.App.ViewModels;
@@ -31,14 +32,15 @@ public sealed partial class ProfileViewModel : ObservableObject
     }
 }
 
-/// <summary>One detected monitor's on/off switch and brightness offset.</summary>
+/// <summary>One detected monitor's on/off switch and brightness offset, and what it supports.</summary>
 public sealed partial class MonitorViewModel : ObservableObject
 {
-    public MonitorViewModel(string id, string name, MonitorSettings settings)
+    public MonitorViewModel(string id, string name, MonitorSupport support, MonitorSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         Id = id;
         Name = name;
+        Support = support;
         Enabled = settings.Enabled;
         BrightnessOffset = settings.BrightnessOffset;
     }
@@ -49,7 +51,25 @@ public sealed partial class MonitorViewModel : ObservableObject
     public partial string Name { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAdjustable), nameof(CanChangeOffset), nameof(SupportText))]
+    public partial MonitorSupport Support { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanChangeOffset))]
     public partial bool Enabled { get; set; }
+
+    public bool IsAdjustable => Support != MonitorSupport.None;
+
+    public bool CanChangeOffset => IsAdjustable && Enabled;
+
+    public string SupportText => Support switch
+    {
+        MonitorSupport.BrightnessAndColour => "Brightness and colour",
+        MonitorSupport.BrightnessOnly => "Brightness only",
+        MonitorSupport.None => "DDC/CI not answering; turn it on in the monitor's menu",
+        MonitorSupport.Unknown => "Not checked yet",
+        _ => throw new InvalidOperationException($"Unhandled support {Support}"),
+    };
 
     [ObservableProperty]
     public partial double BrightnessOffset { get; set; }

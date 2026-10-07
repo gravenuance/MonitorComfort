@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Win32;
 using MonitorComfort.App.Native;
 using MonitorComfort.Core.Context;
@@ -30,6 +32,48 @@ internal sealed class DdcMonitorService
         return monitors;
     }
 
+    /// <summary>
+    /// The connected monitors and their layout, read without any DDC/CI traffic so it's cheap to poll;
+    /// it changes when a monitor is connected, removed, swapped, woken or rearranged.
+    /// </summary>
+    public static unsafe string Topology()
+    {
+        var topology = new StringBuilder();
+        foreach (var hmonitor in DisplayMonitorHandles())
+        {
+            var info = new MonitorInfoEx { Size = sizeof(MonitorInfoEx) };
+            if (!NativeMethods.GetMonitorInfo(hmonitor, &info))
+            {
+                continue;
+            }
+
+            var deviceName = new string(info.Device);
+            var bounds = info.Monitor;
+            topology.Append(CultureInfo.InvariantCulture, $"{deviceName} {bounds.Left},{bounds.Top},{bounds.Right},{bounds.Bottom}");
+            var device = new DisplayDevice { Size = sizeof(DisplayDevice) };
+            for (uint i = 0; NativeMethods.EnumDisplayDevices(deviceName, i, &device, NativeMethods.EddGetDeviceInterfaceName); i++)
+            {
+                topology.Append(' ').Append(new string(device.DeviceId));
+            }
+
+            topology.Append(';');
+        }
+
+        return topology.ToString();
+    }
+
+    /// <summary>Asks the monitor what it supports; slow (a second or more) for a monitor that doesn't answer.</summary>
+    public MonitorSupport SupportOf(DdcMonitor monitor)
+    {
+        ArgumentNullException.ThrowIfNull(monitor);
+        if (monitor.Read(VcpCode.Brightness) is null)
+        {
+            return MonitorSupport.None;
+        }
+
+        return MonitorSupportRules.Classify(CapabilitiesOf(monitor), answersBrightness: true);
+    }
+
     /// <summary>A failed read isn't cached: monitors still waking up after sign-in often don't answer yet.</summary>
     public Capabilities CapabilitiesOf(DdcMonitor monitor)
     {
@@ -42,7 +86,8 @@ internal sealed class DdcMonitorService
         var text = monitor.ReadCapabilities();
         if (text is null)
         {
-            _log.Warning("Monitor {MonitorId} ({Name}) returned no DDC/CI capabilities; will retry", monitor.Id, monitor.Name);
+            // The controller reports what the monitor can do; this repeats every cycle for a monitor without DDC/CI.
+            _log.Debug("Monitor {MonitorId} ({Name}) returned no DDC/CI capabilities; will retry", monitor.Id, monitor.Name);
             return Capabilities.None;
         }
 

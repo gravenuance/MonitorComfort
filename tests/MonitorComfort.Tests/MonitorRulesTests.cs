@@ -157,4 +157,80 @@ public sealed class MonitorRulesTests
 
         Assert.Equal("ACR0B70", value.Current);
     }
+
+    [Theory]
+    [InlineData(AcerCapabilities)]
+    [InlineData(SamsungCapabilities)]
+    public void Both_real_monitors_support_brightness_and_colour(string capabilities)
+    {
+        Assert.Equal(MonitorSupport.BrightnessAndColour, MonitorSupportRules.Classify(Capabilities.Parse(capabilities), answersBrightness: true));
+    }
+
+    [Theory]
+    // Gains listed, but no user colour preset (0B) to make them take effect.
+    [InlineData("vcp(10 12 14(05 06) 16 18 1A)")]
+    [InlineData("vcp(10 14(0B) 16 18)")]
+    [InlineData("vcp(10)")]
+    public void Support_without_settable_colour_is_brightness_only(string capabilities)
+    {
+        Assert.Equal(MonitorSupport.BrightnessOnly, MonitorSupportRules.Classify(Capabilities.Parse(capabilities), answersBrightness: true));
+    }
+
+    [Theory]
+    [InlineData(AcerCapabilities)]
+    [InlineData(SamsungCapabilities)]
+    [InlineData("")]
+    public void A_monitor_that_stops_answering_is_not_adjustable_whatever_its_capabilities(string capabilities)
+    {
+        Assert.Equal(MonitorSupport.None, MonitorSupportRules.Classify(Capabilities.Parse(capabilities), answersBrightness: false));
+    }
+
+    [Fact]
+    public void A_monitor_with_broken_capabilities_that_answers_brightness_is_brightness_only()
+    {
+        Assert.Equal(MonitorSupport.BrightnessOnly, MonitorSupportRules.Classify(Capabilities.None, answersBrightness: true));
+    }
+
+    [Fact]
+    public void Schedule_plans_every_minute_when_the_displays_are_unchanged()
+    {
+        var schedule = new ReplanSchedule();
+
+        Assert.Equal(TimeSpan.FromMinutes(1), schedule.NextDelay(allMonitorsAnswered: false));
+    }
+
+    [Fact]
+    public void Schedule_retries_quickly_after_a_display_change_then_falls_back_to_every_minute()
+    {
+        var schedule = new ReplanSchedule();
+        schedule.DisplaysChanged();
+
+        var delays = Enumerable.Range(0, 5).Select(_ => schedule.NextDelay(allMonitorsAnswered: false).TotalSeconds);
+
+        Assert.Equal([2, 3, 5, 10, 60], delays);
+    }
+
+    [Fact]
+    public void Schedule_stops_retrying_once_every_monitor_answers()
+    {
+        var schedule = new ReplanSchedule();
+        schedule.DisplaysChanged();
+        schedule.NextDelay(allMonitorsAnswered: false);
+
+        Assert.Equal(TimeSpan.FromMinutes(1), schedule.NextDelay(allMonitorsAnswered: true));
+        Assert.Equal(TimeSpan.FromMinutes(1), schedule.NextDelay(allMonitorsAnswered: false));
+    }
+
+    [Fact]
+    public void Schedule_restarts_its_retries_on_each_display_change()
+    {
+        var schedule = new ReplanSchedule();
+        schedule.DisplaysChanged();
+        schedule.NextDelay(allMonitorsAnswered: false);
+        schedule.NextDelay(allMonitorsAnswered: false);
+
+        schedule.DisplaysChanged();
+
+        Assert.Equal(TimeSpan.FromSeconds(2), schedule.NextDelay(allMonitorsAnswered: false));
+    }
 }

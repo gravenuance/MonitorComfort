@@ -192,13 +192,15 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:MonitorViewModel">
-                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="4">
+                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Id}" />
-                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding Enabled}" OnContent="" OffContent=""
-                                  AutomationProperties.Name="{Binding Name, StringFormat='Adjust {0}'}" />
-                    <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,56" ColumnSpacing="{StaticResource ColumnSpacing}"
-                          IsEnabled="{Binding Enabled}">
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding Enabled}" IsEnabled="{Binding IsAdjustable}" OnContent="" OffContent=""
+                                  AutomationProperties.Name="{Binding Name, StringFormat='Adjust {0}'}"
+                                  AutomationProperties.HelpText="{Binding SupportText}" />
+                    <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Classes="hint" Text="{Binding SupportText}" />
+                    <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,56" ColumnSpacing="{StaticResource ColumnSpacing}"
+                          IsEnabled="{Binding CanChangeOffset}">
                       <TextBlock Classes="label" Text="Brightness offset" />
                       <Slider Grid.Column="1" Minimum="-50" Maximum="50" TickFrequency="1" IsSnapToTickEnabled="True"
                               Value="{Binding BrightnessOffset}" AutomationProperties.Name="{Binding Name, StringFormat='{}{0} brightness offset'}" />
