@@ -37,3 +37,6 @@ Thumbs.db
 
 ## Test scratch
 test-data/
+
+## Editor/hook backups
+*.bak
