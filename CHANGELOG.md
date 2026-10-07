@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0 — 2026-10-07
+
 ### Added
 - Opt-in camera light meter: reads the webcam's automatic exposure and white balance every 10 minutes to set brightness and warmth from the measured room light. Calibrate a bright-room and a dim-room brightness, with live preview; brightness follows the line through the two. Falls back to the room-light model when there's no recent reading.
 - `--measure-light` and `--calibrate-light <brightness> [--dim]` diagnostics, logged.
