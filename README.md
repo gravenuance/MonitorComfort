@@ -16,6 +16,7 @@ Samsung S24B350H; any monitor with DDC/CI enabled in its menu should work.
 | Sun elevation | Blends from the **day** profile to **evening** across civil twilight (sun from +6° to −6°). |
 | Bedtime | Blends from **evening** to **night** over 45 minutes after *night starts*, and back after *night ends*. |
 | Room lights | While modelled lights are on (from sunset plus an offset, until sunrise or a set time), brightness stays at or above a floor for the light level, and warmth stays within 500K of the light's colour. |
+| Camera light meter (opt-in) | Every 10 minutes, the webcam's automatic exposure is read back to measure the room light. Once calibrated, brightness moves 10 points per doubling of light, and warmth stays near the light's colour. This replaces the room-light model while readings are fresh (30 minutes). |
 | Full-screen | After 3 s settled, the other monitors drop to a share of their scheduled brightness (default 20%). |
 | Per monitor | A brightness offset evens out panels; any monitor can be left alone. |
 
@@ -27,6 +28,20 @@ write in their own memory, which wears with use.
 
 Before it changes a monitor for the first time, the app saves that monitor's settings.
 **Restore original monitor settings** in the tray menu puts them back and pauses the app.
+
+### Camera light meter
+
+Switch on **Camera light meter** in settings, then:
+1. With the room lit as usual, drag **Comfortable now** until the screens feel right. They
+   preview as you drag.
+2. Press **Calibrate camera** and keep the light steady for about 20 seconds. The first time,
+   this also measures how the camera responds to exposure and gain.
+
+The camera light comes on for about 3 seconds per reading. No image is saved or sent; only the
+light level and colour are logged. Readings are skipped while the app is paused, after 15
+minutes without keyboard or mouse input, and while another app (such as a video call) is using
+the camera. `MonitorComfort.exe --measure-light` takes one reading and writes it to the log.
+See `docs/adr/0002-webcam-as-light-meter.md` for how it works.
 
 ## Build and test
 
