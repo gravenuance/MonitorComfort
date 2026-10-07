@@ -1,0 +1,30 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UI -->
+    <PackageVersion Include="Avalonia" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+
+    <!-- Transitive pin: Avalonia.Desktop pulls a vulnerable Tmds.DBus.Protocol (GHSA-xrw6-gwf8-vvr9);
+         forced to a patched version. Linux-only code path, never loaded on Windows. -->
+    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.95.0" />
+
+    <!-- Logging -->
+    <PackageVersion Include="Serilog" Version="4.4.0" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+
+    <!-- Test. xunit.v3 3.2.x pulls Microsoft.Testing.Platform 2.x, which fails to load with this
+         CodeCoverage version (IDataConsumer TypeLoadException); bump the pair together. -->
+    <PackageVersion Include="xunit.v3" Version="3.1.0" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.0.4" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.10.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MonitorComfort.Core/MonitorComfort.Core.csproj" />
+    <Project Path="src/MonitorComfort.App/MonitorComfort.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MonitorComfort.Tests/MonitorComfort.Tests.csproj" />
+  </Folder>
+</Solution>

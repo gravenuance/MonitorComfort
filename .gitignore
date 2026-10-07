@@ -1,0 +1,39 @@
+## Build output
+bin/
+obj/
+artifacts/
+[Bb]in/
+[Oo]bj/
+
+## IDE / editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+## Test / coverage
+[Tt]est[Rr]esults/
+coverage/
+*.coverage
+*.trx
+*.cobertura.xml
+
+## App runtime data
+*.db
+*.db-shm
+*.db-wal
+/logs/
+appsettings.local.json
+appsettings.*.local.json
+*.secret
+secrets.json
+secrets.dpapi.json
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Test scratch
+test-data/

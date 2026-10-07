@@ -1,0 +1,82 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.{cs,csx}]
+indent_size = 4
+max_line_length = 120
+
+[*.{csproj,props,targets,xml,axaml,xaml}]
+indent_size = 2
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Namespaces
+csharp_style_namespace_declarations = file_scoped:error
+
+# var usage
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# Modern C# preferences
+csharp_prefer_braces = true:warning
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:error
+dotnet_style_readonly_field = true:warning
+dotnet_sort_system_directives_first = true
+
+# Naming: interfaces start with I, async methods end with Async, private fields _camelCase
+dotnet_naming_rule.interfaces_start_with_i.severity = error
+dotnet_naming_rule.interfaces_start_with_i.symbols = interfaces
+dotnet_naming_rule.interfaces_start_with_i.style = begins_with_i
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_style.begins_with_i.required_prefix = I
+dotnet_naming_style.begins_with_i.capitalization = pascal_case
+
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# --- Deliberate analyzer dial-downs (one reason each) ---
+
+# CA1848 (use LoggerMessage delegates) and CA1873 (guard expensive log args): log volume is a
+# handful of lines per minute at most, so the lazy-logging micro-optimisation is noise.
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none
+
+# CA1031 (do not catch general Exception): the app's contract is "never crash the user";
+# the controller loop and UI event boundaries deliberately catch broadly and log.
+dotnet_diagnostic.CA1031.severity = suggestion
+
+# CA1515 (make public types internal): app assemblies are not a public API surface,
+# but the test project needs to see them.
+dotnet_diagnostic.CA1515.severity = none
+
+# CA2007 (ConfigureAwait): no code here awaits under a blocking synchronization context, and
+# the UI awaits must resume on the UI thread.
+dotnet_diagnostic.CA2007.severity = none
+
+[src/MonitorComfort.App/**.cs]
+# CA1724: Avalonia's Application subclass is conventionally named 'App'; the clash with the
+# 'MonitorComfort.App' namespace is expected and harmless.
+dotnet_diagnostic.CA1724.severity = none
+
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none   # underscores in test names are idiomatic
+# xUnit1051: tests here are synchronous or use fake time; no cancellation to pass.
+dotnet_diagnostic.xUnit1051.severity = none
