@@ -38,6 +38,7 @@ internal sealed class ComfortController : IAsyncDisposable
     private static readonly TimeSpan Tick = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan PlanInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan FullscreenSettle = TimeSpan.FromSeconds(3);
+    private const int NoPreview = -1;
 
     private readonly SettingsService _settings;
     private readonly DdcMonitorService _ddc;
@@ -53,6 +54,7 @@ internal sealed class ComfortController : IAsyncDisposable
     private Task _loop = Task.CompletedTask;
     private OriginalMonitorValues _originals;
     private int _applyRequested;
+    private int _previewBrightness = NoPreview;
     private int _restoreRequested;
     private readonly Lock _pauseGate = new();
     private DateTimeOffset? _pausedUntilValue;
@@ -137,6 +139,13 @@ internal sealed class ComfortController : IAsyncDisposable
     }
 
     public void RequestApply() => Interlocked.Exchange(ref _applyRequested, 1);
+
+    /// <summary>Shows this base brightness on every monitor until cleared with null; used while calibrating.</summary>
+    public void PreviewBrightness(int? brightness)
+    {
+        Interlocked.Exchange(ref _previewBrightness, brightness ?? NoPreview);
+        RequestApply();
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -232,7 +241,14 @@ internal sealed class ComfortController : IAsyncDisposable
 
             var fullscreenId = monitors.FirstOrDefault(m => m.DeviceName == _fullscreen.Current)?.Id;
             var plan = ComfortPlanner.Plan(
-                now, TimeZoneInfo.Local, settings, location, [.. monitors.Select(m => m.Id)], fullscreenId, _ambient.Latest);
+                now,
+                TimeZoneInfo.Local,
+                settings,
+                location,
+                [.. monitors.Select(m => m.Id)],
+                fullscreenId,
+                _ambient.Latest,
+                Volatile.Read(ref _previewBrightness) is var preview and >= 0 ? preview : null);
             foreach (var target in plan.Targets)
             {
                 var monitor = monitors.First(m => m.Id == target.MonitorId);

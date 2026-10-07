@@ -50,7 +50,8 @@ public static class ComfortPlanner
         GeoLocation location,
         IReadOnlyList<string> monitorIds,
         string? fullscreenMonitorId,
-        AmbientReading? ambient = null)
+        AmbientReading? ambient = null,
+        int? previewBrightness = null)
     {
         ArgumentNullException.ThrowIfNull(timeZone);
         ArgumentNullException.ThrowIfNull(settings);
@@ -86,6 +87,12 @@ public static class ComfortPlanner
         else
         {
             source = AmbientSource.Schedule;
+        }
+
+        // While the user drags the calibration slider, show that brightness; offsets and full-screen still apply.
+        if (previewBrightness is { } preview)
+        {
+            brightness = Math.Clamp(preview, 0, 100);
         }
 
         kelvin = ColourTemperature.Clamp(kelvin);

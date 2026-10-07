@@ -132,6 +132,31 @@
           </StackPanel>
         </Border>
 
+        <Border Classes="card" ToolTip.Tip="Measures room light regularly. Images are never saved.">
+          <StackPanel Spacing="{StaticResource RowSpacing}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="section" Text="Camera light meter" VerticalAlignment="Center" Margin="0" />
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding CameraEnabled}" OnContent="" OffContent=""
+                            AutomationProperties.Name="Camera light meter" />
+            </Grid>
+            <TextBlock Classes="hint" Text="{Binding CameraStatus}" AutomationProperties.LiveSetting="Polite"
+                       AutomationProperties.Name="Camera light meter status" />
+            <Grid ColumnDefinitions="Auto,*,56" ColumnSpacing="{StaticResource ColumnSpacing}">
+              <TextBlock Classes="label" Text="Comfortable now" />
+              <Slider Grid.Column="1" Minimum="5" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
+                      Value="{Binding ComfortableBrightness}"
+                      AutomationProperties.Name="Brightness that feels comfortable in the current light" />
+              <TextBlock Grid.Column="2" Classes="value" Text="{Binding ComfortableBrightness, StringFormat='{}{0:0}%'}" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource ColumnSpacing}">
+              <Button Content="Calibrate camera" Command="{Binding CalibrateCommand}"
+                      ToolTip.Tip="Keep the room light steady for about 20 seconds" />
+              <Button Content="Measure now" Command="{Binding MeasureNowCommand}"
+                      ToolTip.Tip="Take a light reading straight away" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
         <Border Classes="card">
           <StackPanel Spacing="{StaticResource RowSpacing}">
             <Grid ColumnDefinitions="*,Auto">

@@ -191,6 +191,19 @@ public sealed class AmbientPlanningTests
     }
 
     [Fact]
+    public void Calibration_preview_overrides_brightness_but_keeps_offsets_and_warmth()
+    {
+        var settings = Calibrated.WithMonitor("SAM08DA", new MonitorSettings { BrightnessOffset = -10 });
+
+        var plan = ComfortPlanner.Plan(
+            NightUtc, Winter, settings, Stockholm, Monitors, null, new AmbientReading(NightUtc.AddMinutes(-5), 3.4, 4100), previewBrightness: 70);
+
+        Assert.Equal(70, plan.Targets.Single(t => t.MonitorId == "ACR0B70").Brightness);
+        Assert.Equal(60, plan.Targets.Single(t => t.MonitorId == "SAM08DA").Brightness);
+        Assert.Equal(3600, plan.Kelvin);
+    }
+
+    [Fact]
     public void Full_screen_dimming_still_applies_on_top_of_a_reading()
     {
         var plan = Plan(Calibrated, new AmbientReading(NightUtc.AddMinutes(-5), 3.4, 4100), fullscreen: "ACR0B70");

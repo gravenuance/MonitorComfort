@@ -85,7 +85,7 @@ internal sealed class TrayIconController : IDisposable
     {
         if (_window is null)
         {
-            _viewModel = new SettingsViewModel(_host.Settings, _host.Controller, _host.Autostart, _host.Time);
+            _viewModel = new SettingsViewModel(_host.Settings, _host.Controller, _host.Autostart, _host.Ambient, _host.Time);
             _window = new SettingsWindow { DataContext = _viewModel, Icon = new WindowIcon(_activeBitmap) };
             _window.Closing += OnWindowClosing;
         }
@@ -119,6 +119,7 @@ internal sealed class TrayIconController : IDisposable
 
         e.Cancel = true;
         window.Hide();
+        _viewModel?.EndPreview();
         _host.Settings.Flush();
     }
 
