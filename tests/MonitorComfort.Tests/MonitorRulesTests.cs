@@ -196,7 +196,7 @@ public sealed class MonitorRulesTests
     {
         var schedule = new ReplanSchedule();
 
-        Assert.Equal(TimeSpan.FromMinutes(1), schedule.NextDelay(allMonitorsAnswered: false));
+        Assert.Equal(TimeSpan.FromMinutes(1), schedule.NextDelay());
     }
 
     [Fact]
@@ -205,20 +205,27 @@ public sealed class MonitorRulesTests
         var schedule = new ReplanSchedule();
         schedule.DisplaysChanged();
 
-        var delays = Enumerable.Range(0, 5).Select(_ => schedule.NextDelay(allMonitorsAnswered: false).TotalSeconds);
+        var delays = Enumerable.Range(0, 6).Select(_ => schedule.NextDelay().TotalSeconds);
 
-        Assert.Equal([2, 3, 5, 10, 60], delays);
+        Assert.Equal([2, 3, 5, 10, 20, 60], delays);
     }
 
     [Fact]
-    public void Schedule_stops_retrying_once_every_monitor_answers()
+    public void Schedule_is_settling_for_the_plan_at_a_display_change_and_each_retry()
     {
+        // A monitor still starting up may report values it never applied, so these plans rewrite everything.
         var schedule = new ReplanSchedule();
+        Assert.False(schedule.IsSettling);
         schedule.DisplaysChanged();
-        schedule.NextDelay(allMonitorsAnswered: false);
 
-        Assert.Equal(TimeSpan.FromMinutes(1), schedule.NextDelay(allMonitorsAnswered: true));
-        Assert.Equal(TimeSpan.FromMinutes(1), schedule.NextDelay(allMonitorsAnswered: false));
+        var settling = new List<bool>();
+        for (var plan = 0; plan < 7; plan++)
+        {
+            settling.Add(schedule.IsSettling);
+            schedule.NextDelay();
+        }
+
+        Assert.Equal([true, true, true, true, true, true, false], settling);
     }
 
     [Fact]
@@ -226,11 +233,11 @@ public sealed class MonitorRulesTests
     {
         var schedule = new ReplanSchedule();
         schedule.DisplaysChanged();
-        schedule.NextDelay(allMonitorsAnswered: false);
-        schedule.NextDelay(allMonitorsAnswered: false);
+        schedule.NextDelay();
+        schedule.NextDelay();
 
         schedule.DisplaysChanged();
 
-        Assert.Equal(TimeSpan.FromSeconds(2), schedule.NextDelay(allMonitorsAnswered: false));
+        Assert.Equal(TimeSpan.FromSeconds(2), schedule.NextDelay());
     }
 }

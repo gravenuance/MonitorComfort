@@ -203,10 +203,10 @@ internal sealed class ComfortController : IAsyncDisposable
                         _log.Information("Full-screen ended");
                     }
 
-                    var allAnswered = await ApplyAsync(now, recheckUnanswered: scheduled, cancellationToken);
+                    await ApplyAsync(now, recheckUnanswered: scheduled, rewriteAll: _schedule.IsSettling, cancellationToken);
                     if (scheduled)
                     {
-                        nextPlan = now + _schedule.NextDelay(allAnswered);
+                        nextPlan = now + _schedule.NextDelay();
                     }
                 }
             }
@@ -239,8 +239,7 @@ internal sealed class ComfortController : IAsyncDisposable
         return true;
     }
 
-    /// <summary>Returns whether every monitor answered, so the schedule knows whether to retry soon.</summary>
-    private async Task<bool> ApplyAsync(DateTimeOffset now, bool recheckUnanswered, CancellationToken cancellationToken)
+    private async Task ApplyAsync(DateTimeOffset now, bool recheckUnanswered, bool rewriteAll, CancellationToken cancellationToken)
     {
         var settings = _settings.Current;
         var monitors = _ddc.Enumerate();
@@ -250,24 +249,22 @@ internal sealed class ComfortController : IAsyncDisposable
             if (PausedUntil is { } until && now < until)
             {
                 Publish(new ComfortStatus(ControllerState.Paused, null, KnownSupport(monitors), until));
-                return true;
+                return;
             }
 
             PausedUntil = null;
             if (settings.Location is not { } location)
             {
                 Publish(new ComfortStatus(ControllerState.NeedsLocation, null, KnownSupport(monitors), null));
-                return true;
+                return;
             }
 
             var detected = monitors.Select(m => new DetectedMonitor(m.Id, m.Name, CheckSupport(m, recheckUnanswered))).ToList();
             var adjustable = monitors.Where(m => _support[m.Id] != MonitorSupport.None).ToList();
-            var allAnswered = adjustable.Count == monitors.Count;
-
             if (adjustable.Count == 0)
             {
                 Publish(new ComfortStatus(ControllerState.NoMonitors, null, detected, null));
-                return allAnswered;
+                return;
             }
 
             CaptureOriginals(adjustable, now);
@@ -294,15 +291,13 @@ internal sealed class ComfortController : IAsyncDisposable
                 if (_originals.Find(monitor.Id) is null)
                 {
                     _log.Warning("Leaving {MonitorId} alone until its original settings can be read", monitor.Id);
-                    allAnswered = false;
                     continue;
                 }
 
-                await ApplyTargetAsync(monitor, support, target, settings.ForMonitor(monitor.Id), cancellationToken);
+                await ApplyTargetAsync(monitor, support, target, settings.ForMonitor(monitor.Id), rewriteAll, cancellationToken);
             }
 
             Publish(new ComfortStatus(ControllerState.Active, plan, detected, null));
-            return allAnswered;
         }
         finally
         {
@@ -349,6 +344,7 @@ internal sealed class ComfortController : IAsyncDisposable
         MonitorSupport support,
         MonitorTarget target,
         MonitorSettings settings,
+        bool rewriteAll,
         CancellationToken cancellationToken)
     {
         // Switch preset before reading: the user preset brings its own stored gains.
@@ -360,7 +356,14 @@ internal sealed class ComfortController : IAsyncDisposable
         var gains = colour ? ColourTemperature.Gains(target.Kelvin, neutral) : current?.Gains ?? neutral;
 
         var written = current ?? new MonitorLevels(target.Brightness, gains);
-        foreach (var write in WritePolicy.Writes(current, new MonitorLevels(target.Brightness, gains)))
+
+        // Some monitors report written values they dropped while starting up, so the readback can't skip writes then.
+        if (rewriteAll)
+        {
+            _log.Debug("{MonitorId} settling after a display change; rewriting every value", monitor.Id);
+        }
+
+        foreach (var write in WritePolicy.Writes(rewriteAll ? null : current, new MonitorLevels(target.Brightness, gains)))
         {
             if (write.Code != VcpCode.Brightness && !colour)
             {
