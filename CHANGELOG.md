@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.1 — 2026-10-08
+
+### Fixed
+- After sign-in or switching a monitor on, monitors now get the right settings without pressing Measure now: every value is rewritten for about 40 seconds after a display change, because a monitor still starting up can drop writes while reporting them as applied.
+
 ## 0.3.0 — 2026-10-08
 
 ### Added
