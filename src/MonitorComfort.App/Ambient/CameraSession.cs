@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using MonitorComfort.App.Native;
+using MonitorComfort.Core.Ambient;
 
 namespace MonitorComfort.App.Ambient;
 
@@ -25,11 +26,17 @@ internal sealed class CameraException : Exception
         : base(message) => HResult = hresult;
 }
 
-/// <summary>What the camera's automatic exposure and white balance settled on, and the picture brightness there.</summary>
+/// <summary>The locked exposure and gain a reading was taken at, the white balance automatic exposure settled on, and the picture brightness.</summary>
 internal sealed record CameraSample(int ExposureLog2, int Gain, int? WhiteBalanceKelvin, double MeanLinearY);
 
 /// <summary>Picture brightness across exposure and gain settings of one unchanging scene.</summary>
 internal sealed record CameraSweeps(IReadOnlyList<(int ExposureLog2, double MeanY)> Exposure, IReadOnlyList<(int Gain, double MeanY)> Gain);
+
+/// <summary>Per-frame picture brightness after one locked setting.</summary>
+internal sealed record CameraProbeStep(int ExposureLog2, int Gain, IReadOnlyList<double> FramesY);
+
+/// <summary>What automatic exposure reported, the frames under it, and the frames after each locked step.</summary>
+internal sealed record CameraProbe(int SettledExposureLog2, int SettledGain, IReadOnlyList<double> SettledFramesY, IReadOnlyList<CameraProbeStep> Steps);
 
 /// <summary>
 /// One opening of the webcam. Other apps share its exposure, gain and white-balance settings, so
@@ -121,13 +128,22 @@ internal sealed class CameraSession : IDisposable
         }
     }
 
-    /// <summary>Lets automatic exposure and white balance settle, then locks them and measures the picture.</summary>
+    /// <summary>
+    /// Lets automatic exposure and white balance settle, then measures the picture at a locked setting
+    /// found from there; see <see cref="LockedMetering"/>.
+    /// </summary>
     public CameraSample Measure(CancellationToken cancellationToken)
     {
         var (exposure, gain, whiteBalance) = Settle(cancellationToken);
-        Lock(exposure, gain);
-        var meanY = MeanLinearY(FramesAveraged, cancellationToken);
-        return new CameraSample(exposure, gain, whiteBalance, meanY);
+        var (setting, meanY) = LockedMetering.Measure(
+            Limits(),
+            new CameraSetting(exposure, gain),
+            s =>
+            {
+                Lock(s.ExposureLog2, s.Gain);
+                return MeanLinearY(FramesAveraged, cancellationToken);
+            });
+        return new CameraSample(setting.ExposureLog2, setting.Gain, whiteBalance, meanY);
     }
 
     /// <summary>
@@ -140,7 +156,7 @@ internal sealed class CameraSession : IDisposable
         var exposureRange = Range(_camera.GetRange, MediaFoundation.Exposure);
         var gainRange = Range(_picture.GetRange, MediaFoundation.Gain);
 
-        var midGain = gainRange.Min + ((gainRange.Max - gainRange.Min) / 4);
+        var midGain = Limits().MeteringGain;
         var exposures = new List<(int, double)>();
         for (var exposure = Math.Max(exposureRange.Min, settledExposure - 5); exposure <= Math.Min(exposureRange.Max, settledExposure + 2); exposure++)
         {
@@ -159,6 +175,48 @@ internal sealed class CameraSession : IDisposable
         }
 
         return new CameraSweeps(exposures, gains);
+    }
+
+    /// <summary>
+    /// Frame-by-frame picture brightness after locking what automatic exposure reported, then after each
+    /// gain step up and back down at a fixed exposure, to show how long the camera takes to follow a change.
+    /// </summary>
+    public CameraProbe Probe(int framesPerStep, CancellationToken cancellationToken)
+    {
+        var (exposure, gain, _) = Settle(cancellationToken);
+        var settledY = ReadFrames(framesPerStep / 2, cancellationToken);
+        Lock(exposure, gain);
+        var steps = new List<CameraProbeStep> { new(exposure, gain, ReadFrames(framesPerStep, cancellationToken)) };
+
+        var gainRange = Range(_picture.GetRange, MediaFoundation.Gain);
+        var gainExposure = Math.Max(Range(_camera.GetRange, MediaFoundation.Exposure).Min, exposure - 1);
+        var step = Math.Max(1, (gainRange.Max - gainRange.Min) / 4);
+        var gains = new List<int>();
+        for (var g = gainRange.Min; g < gainRange.Max; g += step)
+        {
+            gains.Add(g);
+        }
+
+        gains.Add(gainRange.Max);
+        gains.AddRange(Enumerable.Reverse(gains).Skip(1).ToList());
+        foreach (var g in gains)
+        {
+            Lock(gainExposure, g);
+            steps.Add(new CameraProbeStep(gainExposure, g, ReadFrames(framesPerStep, cancellationToken)));
+        }
+
+        return new CameraProbe(exposure, gain, settledY, steps);
+    }
+
+    private double[] ReadFrames(int count, CancellationToken cancellationToken)
+    {
+        var frames = new double[count];
+        for (var i = 0; i < count; i++)
+        {
+            frames[i] = ReadFrame(cancellationToken);
+        }
+
+        return frames;
     }
 
     public void Dispose()
@@ -380,6 +438,13 @@ internal sealed class CameraSession : IDisposable
     {
         Check(get(property, out var value, out _), "read a camera setting");
         return value;
+    }
+
+    private CameraLimits Limits()
+    {
+        var exposure = Range(_camera.GetRange, MediaFoundation.Exposure);
+        var gain = Range(_picture.GetRange, MediaFoundation.Gain);
+        return new CameraLimits(exposure.Min, exposure.Max, gain.Min, gain.Max);
     }
 
     private static (int Min, int Max) Range(ControlRange range, int property)

@@ -85,6 +85,28 @@ internal static class Program
             return reading is null ? 1 : 0;
         }
 
+        if (args.Contains("--probe-light", StringComparer.OrdinalIgnoreCase))
+        {
+            var result = Task.Run(() => host.Meter.ProbeAsync(30, CancellationToken.None)).GetAwaiter().GetResult();
+            if (result.Value is not { } probe)
+            {
+                log.Error("Probe light: {Error}", result.Error);
+                return 1;
+            }
+
+            log.Information(
+                "Probe light: automatic exposure reported 2^{Exposure} s, gain {Gain}; frames {Frames}",
+                probe.SettledExposureLog2,
+                probe.SettledGain,
+                Format(probe.SettledFramesY));
+            foreach (var step in probe.Steps)
+            {
+                log.Information("Probe light: locked 2^{Exposure} s, gain {Gain}; frames {Frames}", step.ExposureLog2, step.Gain, Format(step.FramesY));
+            }
+
+            return 0;
+        }
+
         var index = Array.FindIndex(args, a => a.Equals("--calibrate-light", StringComparison.OrdinalIgnoreCase));
         if (index >= 0)
         {
@@ -103,6 +125,9 @@ internal static class Program
 
         return null;
     }
+
+    private static string Format(IReadOnlyList<double> values)
+        => string.Join(' ', values.Select(v => v.ToString("0.0000", CultureInfo.InvariantCulture)));
 
     // Also used by the Avalonia design-time tooling.
     public static AppBuilder BuildAvaloniaApp()

@@ -1,5 +1,5 @@
 # 0002: Use the webcam as an opt-in light meter, reading its automatic exposure
-**Status:** Accepted; calibration mapping superseded by 0003 · **Date:** 2026-10-07
+**Status:** Accepted; calibration mapping superseded by 0003, measurement by 0004 · **Date:** 2026-10-07
 
 ## Context
 The room-light model (ADR 0001's app, lights on from sunset) only knows what the user typed in.

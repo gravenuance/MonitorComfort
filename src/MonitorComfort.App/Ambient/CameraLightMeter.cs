@@ -26,6 +26,9 @@ internal sealed class CameraLightMeter : IDisposable
     public Task<MeterResult<CameraSweeps>> SweepAsync(CancellationToken cancellationToken)
         => RunAsync((session, token) => session.Sweep(token), "measure the response of", cancellationToken);
 
+    public Task<MeterResult<CameraProbe>> ProbeAsync(int framesPerStep, CancellationToken cancellationToken)
+        => RunAsync((session, token) => session.Probe(framesPerStep, token), "probe", cancellationToken);
+
     public void Dispose() => _gate.Dispose();
 
     private async Task<MeterResult<T>> RunAsync<T>(Func<CameraSession, CancellationToken, T> work, string action, CancellationToken cancellationToken)
