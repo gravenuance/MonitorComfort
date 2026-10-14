@@ -16,7 +16,7 @@ Samsung S24B350H; any monitor with DDC/CI enabled in its menu should work.
 | Sun elevation | Blends from the **day** profile to **evening** across civil twilight (sun from +6° to −6°). |
 | Bedtime | Blends from **evening** to **night** over 45 minutes after *night starts*, and back after *night ends*. |
 | Room lights | While modelled lights are on (from sunset plus an offset, until sunrise or a set time), brightness stays at or above a floor for the light level, and warmth stays within 500K of the light's colour. |
-| Camera light meter (opt-in) | Every 10 minutes, the webcam's automatic exposure is read back to measure the room light. Brightness follows the line through your bright-room and dim-room calibrations, and warmth stays near the light's colour. This replaces the room-light model while readings are fresh (30 minutes). |
+| Camera light meter (opt-in) | Every 10 minutes, the webcam measures the room light at a fixed gain, and changes too small to notice are ignored. Brightness follows the line through your bright-room and dim-room calibrations, and warmth stays near the light's colour. This replaces the room-light model while readings are fresh (30 minutes). |
 | Full-screen | After 3 s settled, the other monitors drop to a share of their scheduled brightness (default 20%). |
 | Per monitor | A brightness offset evens out panels; any monitor can be left alone. |
 | Display changes | Within a second of a monitor being connected, removed, swapped, woken or rearranged, the app checks what each monitor supports over DDC/CI and adjusts it. A monitor that doesn't answer yet is retried after about 2, 5, 10 and 20 s, then every minute. The settings window shows each monitor as *Brightness and colour*, *Brightness only*, or not answering DDC/CI. |
@@ -47,7 +47,7 @@ around that level. Either level can be redone at any time.
 The camera light comes on for about 3 seconds per reading. No image is saved or sent; only the
 light level and colour are logged. Readings are skipped while the app is paused, after 15
 minutes without keyboard or mouse input, and while another app (such as a video call) is using
-the camera. `MonitorComfort.exe --measure-light` takes one reading and writes it to the log.
+the camera. `MonitorComfort.exe --measure-light` takes one reading and writes it to the log; `--probe-light` logs frame-by-frame picture brightness across gain settings. Both need the tray app closed.
 In a dark room the camera mostly sees light from the screens, so their brightness feeds back
 into the reading. The adjustment settles rather than running away, but it may settle a little
 off the calibrated level; calibrating with the room lit as usual keeps this small.

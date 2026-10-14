@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.4.0 — 2026-10-14
+
+### Fixed
+- Brightness no longer swings 15-25 points every 10 minutes in an unchanged room. The C920 reports a stale gain while its automatic exposure runs, so readings were taken at whatever gain was left over, often a near-black picture at gain 0 that read 0.7 stops too dark. Readings now lock a fixed gain and step exposure until the picture is well exposed. Calibrations made before this give about 6 points less brightness until redone.
+
+### Changed
+- Automatic readings within 0.25 stops of the last one are ignored, changes up to 1 stop move half the way, and larger ones are followed at once. Measure now and calibration still act on the raw reading.
+
+### Added
+- `--probe-light` diagnostic: logs frame-by-frame picture brightness after locking what automatic exposure reported and across gain steps.
+
 ## 0.3.1 — 2026-10-08
 
 ### Fixed
