@@ -45,8 +45,11 @@ internal sealed class AmbientLightService : IAsyncDisposable
 
     public void Start() => _loop = Task.Run(() => RunAsync(_stop.Token));
 
-    /// <summary>Takes a reading now; null with <see cref="LastError"/> set when it couldn't.</summary>
-    public async Task<AmbientReading?> MeasureNowAsync(CancellationToken cancellationToken)
+    /// <summary>Takes a reading now and acts on it as is; null with <see cref="LastError"/> set when it couldn't.</summary>
+    public Task<AmbientReading?> MeasureNowAsync(CancellationToken cancellationToken)
+        => MeasureAsync(steady: false, cancellationToken);
+
+    private async Task<AmbientReading?> MeasureAsync(bool steady, CancellationToken cancellationToken)
     {
         Interlocked.Exchange(ref _lastAttemptTicks, _time.GetUtcNow().UtcTicks);
         var response = _settings.Current.CameraLight.Response;
@@ -63,7 +66,7 @@ internal sealed class AmbientLightService : IAsyncDisposable
             return null;
         }
 
-        return Record(sample, response);
+        return Record(sample, response, steady);
     }
 
     /// <summary>
@@ -106,7 +109,7 @@ internal sealed class AmbientLightService : IAsyncDisposable
             return result.Error;
         }
 
-        var reading = Record(sample, response);
+        var reading = Record(sample, response, steady: false);
         if (reading is null)
         {
             return LastError;
@@ -143,7 +146,8 @@ internal sealed class AmbientLightService : IAsyncDisposable
         _stop.Dispose();
     }
 
-    private AmbientReading? Record(CameraSample sample, CameraResponse response)
+    // A steady reading goes through AmbientSmoothing; the returned reading is always the raw one.
+    private AmbientReading? Record(CameraSample sample, CameraResponse response, bool steady)
     {
         var stops = response.LightStops(sample.MeanLinearY, sample.ExposureLog2, sample.Gain);
         _log.Information(
@@ -161,7 +165,13 @@ internal sealed class AmbientLightService : IAsyncDisposable
 
         LastError = null;
         var reading = new AmbientReading(_time.GetUtcNow(), value, sample.WhiteBalanceKelvin);
-        Volatile.Write(ref _latest, reading);
+        var acted = steady ? AmbientSmoothing.Next(Latest, reading) : reading;
+        if (acted.LightStops != reading.LightStops)
+        {
+            _log.Information("Acting on {Acted:0.00} stops to keep the screens steady", acted.LightStops);
+        }
+
+        Volatile.Write(ref _latest, acted);
         ReadingChanged?.Invoke(this, EventArgs.Empty);
         return reading;
     }
@@ -178,7 +188,7 @@ internal sealed class AmbientLightService : IAsyncDisposable
                 var due = _time.GetUtcNow() - lastAttempt >= TimeSpan.FromMinutes(camera.IntervalMinutes);
                 if (camera.IsReady && due && !_isPaused() && !UserIsIdle())
                 {
-                    await MeasureNowAsync(cancellationToken);
+                    await MeasureAsync(steady: true, cancellationToken);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
