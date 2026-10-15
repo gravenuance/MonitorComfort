@@ -26,7 +26,7 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
-  <!-- CI restores strictly from the lock files and builds with source paths normalised, so a tag rebuilds byte for byte. -->
+  <!-- CI restores strictly from the lock files, and normalises source paths so the build does not depend on where it was checked out. -->
   <PropertyGroup Condition="'$(CI)' == 'true'">
     <RestoreLockedMode>true</RestoreLockedMode>
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
