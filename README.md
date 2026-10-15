@@ -9,6 +9,8 @@ It changes the monitors' own settings, not the graphics card's colour ramp. That
 full colour range and works alongside any GPU. Developed against an Acer KA242Y and a
 Samsung S24B350H; any monitor with DDC/CI enabled in its menu should work.
 
+Requires Windows 10 version 2004 or later, 64-bit.
+
 ## How it decides
 
 | Input | Effect |
@@ -55,7 +57,9 @@ See `docs/adr/0002-webcam-as-light-meter.md` for how it works.
 
 ## Build and test
 
-Requires the .NET 10 SDK (pinned in `global.json`).
+Requires the exact .NET SDK pinned in `global.json`. The lock files record the SDK's own packages,
+so after changing the SDK run `dotnet restore MonitorComfort.slnx --force-evaluate` and commit the
+updated `packages.lock.json` files.
 
 ```powershell
 dotnet build MonitorComfort.slnx -c Release
@@ -74,14 +78,24 @@ the Windows location service, which some managed PCs disable.)
 
 ## Install
 
+Download `MonitorComfort-<version>-win-x64.exe` from the
+[latest release](https://github.com/gravenuance/MonitorComfort/releases/latest), put it anywhere
+permanent and run it. **Start with Windows** in settings registers that copy to start at sign-in.
+
+The executable is unsigned, so Windows SmartScreen may warn on first launch (**More info** →
+**Run anyway**). Before that, check it is the one the release workflow built. Compare its checksum
+with the `.sha256` file next to it in the release, or verify its build provenance with the GitHub CLI:
+
+```powershell
+(Get-FileHash .\MonitorComfort-0.5.0-win-x64.exe -Algorithm SHA256).Hash
+gh attestation verify .\MonitorComfort-0.5.0-win-x64.exe --repo gravenuance/MonitorComfort
+```
+
+To build the executable yourself instead:
+
 ```powershell
 dotnet publish src/MonitorComfort.App -c Release -o publish
 ```
-
-Copy `publish/MonitorComfort.exe` anywhere permanent and run it. **Start with Windows** in
-settings registers that copy to start at sign-in. The executable is unsigned, so Windows
-SmartScreen may warn on first launch. Check its SHA-256 (`Get-FileHash`) against the one
-you published.
 
 ## Files
 

@@ -15,7 +15,7 @@
 
     <Version>0.4.0</Version>
     <Product>MonitorComfort</Product>
-    <Authors>markos</Authors>
+    <Authors>gravenuance</Authors>
     <Company>MonitorComfort</Company>
 
     <Deterministic>true</Deterministic>
@@ -24,6 +24,12 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <!-- CI restores strictly from the lock files and builds with source paths normalised, so a tag rebuilds byte for byte. -->
+  <PropertyGroup Condition="'$(CI)' == 'true'">
+    <RestoreLockedMode>true</RestoreLockedMode>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <!-- Release is the verification configuration; warnings fail the build there. -->

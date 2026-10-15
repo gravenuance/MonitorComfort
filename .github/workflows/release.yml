@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Check the tag matches the version
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = (Select-Xml -Path Directory.Build.props -XPath '//Version').Node.InnerText
+          if ($env:TAG -ne "v$version") { throw "Tag $env:TAG does not match version $version in Directory.Build.props" }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build
+        run: dotnet build MonitorComfort.slnx -c Release
+
+      - name: Test
+        run: dotnet run --project tests/MonitorComfort.Tests -c Release --no-build
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish src/MonitorComfort.App -c Release -o publish
+          New-Item -ItemType Directory -Path dist | Out-Null
+          $exe = "MonitorComfort-$env:VERSION-win-x64.exe"
+          Copy-Item publish/MonitorComfort.exe "dist/$exe"
+          $hash = (Get-FileHash "dist/$exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $exe" | Out-File -FilePath "dist/$exe.sha256" -Encoding ascii -NoNewline
+          "Checksum: $hash"
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.exe
+
+      - name: Extract release notes
+        shell: pwsh
+        run: |
+          $lines = Get-Content CHANGELOG.md
+          $start = [Array]::FindIndex($lines, [Predicate[string]] { param($l) $l -match "^## $([regex]::Escape($env:VERSION))( |$)" })
+          if ($start -lt 0) { throw "CHANGELOG.md has no section for $env:VERSION" }
+          $end = [Array]::FindIndex($lines, $start + 1, [Predicate[string]] { param($l) $l -match '^## ' })
+          if ($end -lt 0) { $end = $lines.Length }
+          $lines[($start + 1)..($end - 1)] -join "`n" | Out-File -FilePath notes.md -Encoding utf8
+
+      - name: Create the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create $env:TAG (Get-ChildItem dist).FullName --title "MonitorComfort $env:VERSION" --notes-file notes.md --verify-tag
