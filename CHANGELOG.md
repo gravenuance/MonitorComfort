@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.5.0 — 2026-10-15
+
+### Added
+- Cameras other than the C920: the light meter uses the first camera with manual exposure, skipping virtual cameras, and keeps exposure and gain on the steps the camera reports. It reads at a frame size the camera offers, and works without a manual gain control.
+- With more than one camera connected, a **Camera** list in settings picks the light meter's camera. Choosing a different camera clears the calibration, to be redone with that camera.
+- Releases are built on GitHub from the tag, with a SHA-256 checksum and build provenance.
+
+### Changed
+- A calibration belongs to the camera it was made with, and readings never come from another camera; the same webcam on another USB port still counts as that camera. An existing calibration is assigned to the camera its next reading comes from, so it carries over without redoing.
+- A camera whose exposure can't be set by hand now reports "This camera can't be used as a light meter" instead of "Camera busy or unavailable".
+
 ## 0.4.0 — 2026-10-14
 
 ### Fixed
