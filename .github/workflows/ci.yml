@@ -1,7 +1,10 @@
 name: CI
 
 on:
+  # Branches only: a version tag is built and tested by the release workflow.
   push:
+    branches:
+      - "**"
   pull_request:
 
 permissions:
