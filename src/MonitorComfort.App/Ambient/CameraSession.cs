@@ -57,74 +57,86 @@ internal sealed class CameraSession : IDisposable
     private readonly IMFActivate _activate;
     private readonly object _source;
     private readonly IAMCameraControl _camera;
-    private readonly IAMVideoProcAmp _picture;
+    private readonly IAMVideoProcAmp? _picture;
     private readonly IMFSourceReader _reader;
+    private readonly CameraLimits _limits;
     private readonly (int Value, int Flags) _exposure;
-    private readonly (int Value, int Flags) _gain;
+    private readonly (int Value, int Flags)? _gain;
     private readonly (int Value, int Flags)? _whiteBalance;
     private bool _disposed;
 
-    private CameraSession(IMFActivate activate, object source, IMFSourceReader reader, string name)
+    private CameraSession(IMFActivate activate, object source, IMFSourceReader reader, CameraDevice device)
     {
         _activate = activate;
         _source = source;
         _reader = reader;
-        Name = name;
-        _camera = (IAMCameraControl)source;
-        _picture = (IAMVideoProcAmp)source;
+        Device = device;
+        _camera = source as IAMCameraControl ?? throw new NotSupportedException("The camera has no camera controls.");
+        _picture = source as IAMVideoProcAmp;
+        var exposureRange = ManualRange(_camera.GetRange, MediaFoundation.Exposure)
+            ?? throw new NotSupportedException("The camera has no manual exposure.");
         _exposure = Get(_camera.Get, MediaFoundation.Exposure) ?? throw new NotSupportedException("The camera has no exposure control.");
-        _gain = Get(_picture.Get, MediaFoundation.Gain) ?? throw new NotSupportedException("The camera has no gain control.");
-        _whiteBalance = Get(_picture.Get, MediaFoundation.WhiteBalance);
+
+        // Without a gain control the camera meters on exposure alone. A gain it sets itself would move under a
+        // locked reading, so a camera whose gain can't be set by hand can't meter.
+        var gainRange = _picture is null ? null : ManualRange(_picture.GetRange, MediaFoundation.Gain);
+        if (gainRange is null && _picture is not null && HasAutomaticOnly(_picture.GetRange, MediaFoundation.Gain))
+        {
+            throw new NotSupportedException("The camera's gain can't be set by hand.");
+        }
+
+        _gain = _picture is null || gainRange is null ? null : Get(_picture.Get, MediaFoundation.Gain);
+        _limits = new CameraLimits(exposureRange, _gain is null ? null : gainRange);
+        _whiteBalance = _picture is null ? null : Get(_picture.Get, MediaFoundation.WhiteBalance);
     }
 
-    public string Name { get; }
+    public CameraDevice Device { get; }
 
-    /// <summary>Opens the first video capture device, or returns null when there is none.</summary>
-    public static unsafe CameraSession? OpenFirst()
+    /// <summary>The video capture devices, in Windows' order.</summary>
+    public static IReadOnlyList<CameraDevice> List()
     {
-        var query = CreateAttributes();
+        var activates = EnumerateDevices();
         try
         {
-            var sourceType = MediaFoundation.SourceType;
-            var videoCapture = MediaFoundation.SourceTypeVideoCapture;
-            query.SetGUID(ref sourceType, ref videoCapture);
-
-            nint array;
-            uint count;
-            var queryPointer = Marshal.GetIUnknownForObject(query);
-            try
-            {
-                Check(NativeMethods.MFEnumDeviceSources(queryPointer, &array, &count), "enumerate cameras");
-            }
-            finally
-            {
-                Marshal.Release(queryPointer);
-            }
-
-            IMFActivate? chosen = null;
-            try
-            {
-                for (var i = 0; i < count; i++)
-                {
-                    var pointer = Marshal.ReadIntPtr(array, i * IntPtr.Size);
-                    if (chosen is null)
-                    {
-                        chosen = (IMFActivate)Marshal.GetObjectForIUnknown(pointer);
-                    }
-
-                    Marshal.Release(pointer);
-                }
-            }
-            finally
-            {
-                NativeMethods.CoTaskMemFree(array);
-            }
-
-            return chosen is null ? null : Open(chosen);
+            return [.. activates.Select(Describe)];
         }
         finally
         {
-            Marshal.ReleaseComObject(query);
+            foreach (var activate in activates)
+            {
+                Marshal.ReleaseComObject(activate);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens the chosen camera, or without a choice the first that can meter; null when there is no such camera.
+    /// See <see cref="CameraChoice"/>.
+    /// </summary>
+    public static CameraSession? Open(string? chosenId, Action<CameraDevice, NotSupportedException> skipped)
+    {
+        var activates = EnumerateDevices();
+        var handedOver = new HashSet<IMFActivate>();
+        try
+        {
+            var devices = activates.Select(a => (Device: Describe(a), Activate: a)).ToList();
+            return CameraChoice.OpenFirstUsable(
+                CameraChoice.Candidates([.. devices.Select(d => d.Device)], chosenId),
+                device =>
+                {
+                    var activate = devices.First(d => ReferenceEquals(d.Device, device)).Activate;
+                    handedOver.Add(activate);
+                    return Open(activate, device);
+                },
+                skipped);
+        }
+        finally
+        {
+            // Open owns the activates it was given, whether it succeeded or not.
+            foreach (var activate in activates.Where(a => !handedOver.Contains(a)))
+            {
+                Marshal.ReleaseComObject(activate);
+            }
         }
     }
 
@@ -136,7 +148,7 @@ internal sealed class CameraSession : IDisposable
     {
         var (exposure, gain, whiteBalance) = Settle(cancellationToken);
         var (setting, meanY) = LockedMetering.Measure(
-            Limits(),
+            _limits,
             new CameraSetting(exposure, gain),
             s =>
             {
@@ -153,22 +165,21 @@ internal sealed class CameraSession : IDisposable
     public CameraSweeps Sweep(CancellationToken cancellationToken)
     {
         var (settledExposure, _, _) = Settle(cancellationToken);
-        var exposureRange = Range(_camera.GetRange, MediaFoundation.Exposure);
-        var gainRange = Range(_picture.GetRange, MediaFoundation.Gain);
+        var exposureRange = _limits.Exposure;
 
-        var midGain = Limits().MeteringGain;
+        var midGain = _limits.MeteringGain;
         var exposures = new List<(int, double)>();
-        for (var exposure = Math.Max(exposureRange.Min, settledExposure - 5); exposure <= Math.Min(exposureRange.Max, settledExposure + 2); exposure++)
+        var longest = Math.Min(exposureRange.Max, settledExposure + (2 * exposureRange.Step));
+        for (var exposure = exposureRange.Snap(settledExposure - (5 * exposureRange.Step)); exposure <= longest; exposure += exposureRange.Step)
         {
             Lock(exposure, midGain);
             exposures.Add((exposure, MeanLinearY(FramesAveraged / 2, cancellationToken)));
         }
 
-        // One stop darker than the settled exposure, so the highest gains stay below clipping.
-        var gainExposure = Math.Max(exposureRange.Min, settledExposure - 1);
+        // About one stop darker than the settled exposure, so the highest gains stay below clipping.
+        var gainExposure = exposureRange.Snap(settledExposure - 1);
         var gains = new List<(int, double)>();
-        var step = Math.Max(1, (gainRange.Max - gainRange.Min) / 8);
-        for (var gain = gainRange.Min; gain <= gainRange.Max; gain = gain == gainRange.Max ? gain + 1 : Math.Min(gain + step, gainRange.Max))
+        foreach (var gain in _limits.GainLadder(8))
         {
             Lock(gainExposure, gain);
             gains.Add((gain, MeanLinearY(FramesAveraged / 2, cancellationToken)));
@@ -188,16 +199,8 @@ internal sealed class CameraSession : IDisposable
         Lock(exposure, gain);
         var steps = new List<CameraProbeStep> { new(exposure, gain, ReadFrames(framesPerStep, cancellationToken)) };
 
-        var gainRange = Range(_picture.GetRange, MediaFoundation.Gain);
-        var gainExposure = Math.Max(Range(_camera.GetRange, MediaFoundation.Exposure).Min, exposure - 1);
-        var step = Math.Max(1, (gainRange.Max - gainRange.Min) / 4);
-        var gains = new List<int>();
-        for (var g = gainRange.Min; g < gainRange.Max; g += step)
-        {
-            gains.Add(g);
-        }
-
-        gains.Add(gainRange.Max);
+        var gainExposure = _limits.Exposure.Snap(exposure - 1);
+        var gains = _limits.GainLadder(4).ToList();
         gains.AddRange(Enumerable.Reverse(gains).Skip(1).ToList());
         foreach (var g in gains)
         {
@@ -230,10 +233,14 @@ internal sealed class CameraSession : IDisposable
         try
         {
             _camera.Set(MediaFoundation.Exposure, _exposure.Value, _exposure.Flags);
-            _picture.Set(MediaFoundation.Gain, _gain.Value, _gain.Flags);
+            if (_gain is { } gain)
+            {
+                _picture?.Set(MediaFoundation.Gain, gain.Value, gain.Flags);
+            }
+
             if (_whiteBalance is { } whiteBalance)
             {
-                _picture.Set(MediaFoundation.WhiteBalance, whiteBalance.Value, whiteBalance.Flags);
+                _picture?.Set(MediaFoundation.WhiteBalance, whiteBalance.Value, whiteBalance.Flags);
             }
         }
         finally
@@ -263,10 +270,61 @@ internal sealed class CameraSession : IDisposable
         }
     }
 
-    private static unsafe CameraSession Open(IMFActivate activate)
+    private static unsafe List<IMFActivate> EnumerateDevices()
+    {
+        var query = CreateAttributes();
+        try
+        {
+            var sourceType = MediaFoundation.SourceType;
+            var videoCapture = MediaFoundation.SourceTypeVideoCapture;
+            query.SetGUID(ref sourceType, ref videoCapture);
+
+            nint array;
+            uint count;
+            var queryPointer = Marshal.GetIUnknownForObject(query);
+            try
+            {
+                Check(NativeMethods.MFEnumDeviceSources(queryPointer, &array, &count), "enumerate cameras");
+            }
+            finally
+            {
+                Marshal.Release(queryPointer);
+            }
+
+            var activates = new List<IMFActivate>((int)count);
+            try
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var pointer = Marshal.ReadIntPtr(array, i * IntPtr.Size);
+                    activates.Add((IMFActivate)Marshal.GetObjectForIUnknown(pointer));
+                    Marshal.Release(pointer);
+                }
+            }
+            finally
+            {
+                NativeMethods.CoTaskMemFree(array);
+            }
+
+            return activates;
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(query);
+        }
+    }
+
+    private static CameraDevice Describe(IMFActivate activate)
     {
         var friendlyName = MediaFoundation.FriendlyName;
-        var name = activate.GetAllocatedString(ref friendlyName, out var value, out _) >= 0 ? value : "camera";
+        var symbolicLink = MediaFoundation.SymbolicLink;
+        var name = activate.GetAllocatedString(ref friendlyName, out var value, out _) >= 0 ? value : "Camera";
+        var id = activate.GetAllocatedString(ref symbolicLink, out var link, out _) >= 0 ? link : name;
+        return new CameraDevice(id, name);
+    }
+
+    private static unsafe CameraSession Open(IMFActivate activate, CameraDevice device)
+    {
         var sourceId = MediaFoundation.MediaSource;
         object source;
         try
@@ -277,6 +335,13 @@ internal sealed class CameraSession : IDisposable
         {
             Release(null, null, activate);
             throw;
+        }
+
+        // Checked before opening a stream, which a virtual camera may refuse with an error that would end the search.
+        if (source is not IAMCameraControl camera || ManualRange(camera.GetRange, MediaFoundation.Exposure) is null)
+        {
+            Release(null, source, activate);
+            throw new NotSupportedException("The camera has no manual exposure.");
         }
 
         var readerAttributes = CreateAttributes();
@@ -294,18 +359,22 @@ internal sealed class CameraSession : IDisposable
             reader = (IMFSourceReader)Marshal.GetObjectForIUnknown(readerPointer);
             Marshal.Release(readerPointer);
 
-            // Small RGB frames: plenty for an average, and cheap to scan.
+            // Small RGB frames at a size the camera offers: plenty for an average, and cheap to scan.
             var major = MediaFoundation.MajorType;
             var video = MediaFoundation.Video;
             var subType = MediaFoundation.SubType;
             var rgb32 = MediaFoundation.Rgb32;
-            var frameSize = MediaFoundation.FrameSize;
             output.SetGUID(ref major, ref video);
             output.SetGUID(ref subType, ref rgb32);
-            output.SetUINT64(ref frameSize, (640UL << 32) | 480UL);
+            if (FrameSize.Pick(NativeFrameSizes(reader)) is { } size)
+            {
+                var frameSize = MediaFoundation.FrameSize;
+                output.SetUINT64(ref frameSize, ((ulong)size.Width << 32) | (uint)size.Height);
+            }
+
             reader.SetCurrentMediaType(MediaFoundation.FirstVideoStream, 0, output);
 
-            return new CameraSession(activate, source, reader, name);
+            return new CameraSession(activate, source, reader, device);
         }
         catch
         {
@@ -326,7 +395,7 @@ internal sealed class CameraSession : IDisposable
         _camera.Set(MediaFoundation.Exposure, _exposure.Value, MediaFoundation.AutoFlag);
         if (_whiteBalance is { } whiteBalance)
         {
-            _picture.Set(MediaFoundation.WhiteBalance, whiteBalance.Value, MediaFoundation.AutoFlag);
+            _picture?.Set(MediaFoundation.WhiteBalance, whiteBalance.Value, MediaFoundation.AutoFlag);
         }
 
         var clock = Stopwatch.StartNew();
@@ -335,7 +404,7 @@ internal sealed class CameraSession : IDisposable
         while (clock.Elapsed < SettleTimeout)
         {
             ReadFrame(cancellationToken);
-            var current = (Value(_camera.Get, MediaFoundation.Exposure), Value(_picture.Get, MediaFoundation.Gain), WhiteBalanceNow());
+            var current = (Value(_camera.Get, MediaFoundation.Exposure), GainNow(), WhiteBalanceNow());
             if (current != last)
             {
                 last = current;
@@ -350,14 +419,19 @@ internal sealed class CameraSession : IDisposable
         return last ?? throw new TimeoutException("The camera delivered no frames.");
     }
 
+    private int GainNow() => _gain is not null && _picture is not null ? Value(_picture.Get, MediaFoundation.Gain) : 0;
+
     private int? WhiteBalanceNow()
-        => _whiteBalance is not null && _picture.Get(MediaFoundation.WhiteBalance, out var value, out _) >= 0 ? value : null;
+        => _whiteBalance is not null && _picture is not null && _picture.Get(MediaFoundation.WhiteBalance, out var value, out _) >= 0 ? value : null;
 
     // A rejected write would leave automatic exposure running under a reading that assumes it locked.
     private void Lock(int exposure, int gain)
     {
         Check(_camera.Set(MediaFoundation.Exposure, exposure, MediaFoundation.ManualFlag), "lock the exposure");
-        Check(_picture.Set(MediaFoundation.Gain, gain, MediaFoundation.ManualFlag), "lock the gain");
+        if (_gain is not null && _picture is not null)
+        {
+            Check(_picture.Set(MediaFoundation.Gain, gain, MediaFoundation.ManualFlag), "lock the gain");
+        }
     }
 
     private double MeanLinearY(int frames, CancellationToken cancellationToken)
@@ -429,7 +503,7 @@ internal sealed class CameraSession : IDisposable
 
     private delegate int ControlGet(int property, out int value, out int flags);
 
-    private delegate int ControlRange(int property, out int min, out int max, out int step, out int defaultValue, out int flags);
+    private delegate int ControlRangeGet(int property, out int min, out int max, out int step, out int defaultValue, out int flags);
 
     private static (int Value, int Flags)? Get(ControlGet get, int property)
         => get(property, out var value, out var flags) >= 0 ? (value, flags) : null;
@@ -440,17 +514,39 @@ internal sealed class CameraSession : IDisposable
         return value;
     }
 
-    private CameraLimits Limits()
-    {
-        var exposure = Range(_camera.GetRange, MediaFoundation.Exposure);
-        var gain = Range(_picture.GetRange, MediaFoundation.Gain);
-        return new CameraLimits(exposure.Min, exposure.Max, gain.Min, gain.Max);
-    }
+    // Null when the control is missing or can't be set by hand; a range with a single value counts as missing.
+    private static ControlRange? ManualRange(ControlRangeGet range, int property)
+        => range(property, out var min, out var max, out var step, out _, out var flags) >= 0
+            && (flags & MediaFoundation.ManualFlag) != 0
+            && max > min
+                ? new ControlRange(min, max, step)
+                : null;
 
-    private static (int Min, int Max) Range(ControlRange range, int property)
+    private static bool HasAutomaticOnly(ControlRangeGet range, int property)
+        => range(property, out _, out _, out _, out _, out var flags) >= 0
+            && (flags & MediaFoundation.AutoFlag) != 0
+            && (flags & MediaFoundation.ManualFlag) == 0;
+
+    private static List<FrameSize> NativeFrameSizes(IMFSourceReader reader)
     {
-        Check(range(property, out var min, out var max, out _, out _, out _), "read control range");
-        return (min, max);
+        var sizes = new List<FrameSize>();
+        for (uint index = 0; reader.GetNativeMediaType(MediaFoundation.FirstVideoStream, index, out var type) >= 0; index++)
+        {
+            try
+            {
+                var frameSize = MediaFoundation.FrameSize;
+                if (type.GetUINT64(ref frameSize, out var packed) >= 0)
+                {
+                    sizes.Add(new FrameSize((int)(packed >> 32), (int)(packed & 0xFFFFFFFF)));
+                }
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(type);
+            }
+        }
+
+        return sizes;
     }
 
     private static unsafe IMFAttributes CreateAttributes()

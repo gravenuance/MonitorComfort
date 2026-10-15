@@ -42,6 +42,11 @@ Switch on **Camera light meter** in settings, then calibrate two levels:
 2. **Dim room:** turn the lights down, set **Comfortable now** again, and press **Save for dim
    room**.
 
+With more than one camera connected, a **Camera** list appears; otherwise the app uses the first
+camera with manual exposure, skipping virtual cameras. Calibration belongs to the camera it was made
+with: readings never come from another camera, and choosing a different one means calibrating again.
+A camera without manual gain works on exposure alone, with less range in a dark room.
+
 Brightness then follows the straight line through your two choices, measured in stops of light,
 and continues past them, within 5–100%. With only one level saved, it changes 10 points per stop
 around that level. Either level can be redone at any time.
@@ -53,7 +58,8 @@ the camera. `MonitorComfort.exe --measure-light` takes one reading and writes it
 In a dark room the camera mostly sees light from the screens, so their brightness feeds back
 into the reading. The adjustment settles rather than running away, but it may settle a little
 off the calibrated level; calibrating with the room lit as usual keeps this small.
-See `docs/adr/0002-webcam-as-light-meter.md` for how it works.
+See `docs/adr/0002-webcam-as-light-meter.md` for how it works, and `docs/adr/0005` for how it
+handles cameras other than the C920 it was developed with.
 
 ## Build and test
 

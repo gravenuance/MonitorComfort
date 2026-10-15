@@ -52,6 +52,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         ApplyStatus(controller.Status);
         _controller.StatusChanged += OnStatusChanged;
         _ambient.ReadingChanged += OnReadingChanged;
+        _ambient.CameraRemembered += OnCameraRemembered;
         CameraStatus = DescribeCamera();
         CalibrationSummary = DescribeCalibration();
     }
@@ -135,6 +136,15 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string CalibrationSummary { get; set; } = "";
 
+    /// <summary>The cameras Windows lists; the choice shows only when there is more than one.</summary>
+    public ObservableCollection<CameraDevice> Cameras { get; } = [];
+
+    [ObservableProperty]
+    public partial bool HasCameraChoice { get; set; }
+
+    [ObservableProperty]
+    public partial CameraDevice? SelectedCamera { get; set; }
+
     /// <summary>The brightness that feels right in the current light; previewed on the monitors while changed.</summary>
     [ObservableProperty]
     public partial double ComfortableBrightness { get; set; }
@@ -154,6 +164,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         EndPreview();
         _controller.StatusChanged -= OnStatusChanged;
         _ambient.ReadingChanged -= OnReadingChanged;
+        _ambient.CameraRemembered -= OnCameraRemembered;
         foreach (var profile in Profiles)
         {
             profile.PropertyChanged -= OnChildChanged;
@@ -189,6 +200,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         var progress = new Progress<string>(message => CameraStatus = message);
         var error = await _ambient.CalibrateAsync(level, brightness, progress, cancellationToken);
         CalibrationSummary = DescribeCalibration();
+        SelectCurrentCamera();
         EndPreview();
         _loading = true;
         try
@@ -211,6 +223,44 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         CameraStatus = DescribeCamera();
     }
 
+    /// <summary>Lists the cameras again, keeping existing entries; run each time the window opens.</summary>
+    [RelayCommand]
+    private async Task RefreshCamerasAsync(CancellationToken cancellationToken)
+    {
+        var listed = await _ambient.ListCamerasAsync(cancellationToken);
+        for (var i = Cameras.Count - 1; i >= 0; i--)
+        {
+            if (!listed.Contains(Cameras[i]))
+            {
+                Cameras.RemoveAt(i);
+            }
+        }
+
+        foreach (var camera in listed.Where(c => !Cameras.Contains(c)))
+        {
+            Cameras.Add(camera);
+        }
+
+        SelectCurrentCamera();
+    }
+
+    // The list also shows with one camera when the calibrated camera isn't it, so the user can switch.
+    private void SelectCurrentCamera()
+    {
+        var id = _settings.Current.CameraLight.CameraId;
+        _loading = true;
+        try
+        {
+            var candidates = id is null ? [] : CameraChoice.Candidates(Cameras, id);
+            SelectedCamera = candidates.Count > 0 ? candidates[0] : null;
+            HasCameraChoice = Cameras.Count > 1 || (Cameras.Count == 1 && id is not null && SelectedCamera is null);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
     [RelayCommand]
     private void TogglePause()
     {
@@ -230,8 +280,20 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         base.OnPropertyChanged(e);
         if (_loading || e.PropertyName is nameof(StatusText) or nameof(NeedsAttention) or nameof(IsPaused)
             or nameof(LocationMessage) or nameof(SunTimes) or nameof(LightsOffAtTime) or nameof(CameraStatus)
-            or nameof(CalibrationSummary))
+            or nameof(CalibrationSummary) or nameof(HasCameraChoice))
         {
+            return;
+        }
+
+        if (e.PropertyName is nameof(SelectedCamera))
+        {
+            if (SelectedCamera is { } camera)
+            {
+                _ambient.ChooseCamera(camera);
+                CalibrationSummary = DescribeCalibration();
+                CameraStatus = DescribeCamera();
+            }
+
             return;
         }
 
@@ -365,6 +427,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             CameraStatus = DescribeCamera();
         }
     });
+
+    private void OnCameraRemembered(object? sender, EventArgs e) => Dispatcher.UIThread.Post(SelectCurrentCamera);
 
     private string DescribeCalibration()
     {

@@ -7,7 +7,7 @@ public sealed class LockedMeteringTests
     private const double Gamma = 1.25;
 
     // The C920's ranges.
-    private static readonly CameraLimits Limits = new(-11, -2, 0, 255);
+    private static readonly CameraLimits Limits = new(new ControlRange(-11, -2, 1), new ControlRange(0, 255, 1));
 
     // The fitted response; the camera below matches it except at gain 0, as measured on the C920.
     private static readonly CameraResponse Response = new(
@@ -84,6 +84,78 @@ public sealed class LockedMeteringTests
 
         Assert.Equal(new CameraSetting(-2, 63), camera.Locked[0]);
     }
+
+    [Fact]
+    public void Exposure_and_gain_move_only_along_the_cameras_step_grid()
+    {
+        // Exposure steps 2 from -12, gain steps 10 up to 250; gain rises by about 63 and snaps to the nearest 10.
+        var stepped = new CameraLimits(new ControlRange(-12, -2, 2), new ControlRange(0, 255, 10));
+        var camera = new FakeCamera(sceneStops: -12);
+
+        var (setting, _) = LockedMetering.Measure(stepped, new CameraSetting(-7, 0), camera.LockAndRead);
+
+        Assert.Equal(
+            [new CameraSetting(-6, 60), new CameraSetting(-4, 60), new CameraSetting(-2, 60), new CameraSetting(-2, 120), new CameraSetting(-2, 180), new CameraSetting(-2, 240), new CameraSetting(-2, 250)],
+            camera.Locked);
+        Assert.Equal(new CameraSetting(-2, 250), setting);
+    }
+
+    [Fact]
+    public void A_camera_without_gain_meters_on_exposure_alone()
+    {
+        var exposureOnly = new CameraLimits(new ControlRange(-11, -2, 1), null);
+        var dark = new FakeCamera(sceneStops: -12);
+
+        var (setting, _) = LockedMetering.Measure(exposureOnly, new CameraSetting(-4, 37), dark.LockAndRead);
+
+        Assert.Equal(new CameraSetting(-2, 0), setting);
+        Assert.Equal([new CameraSetting(-4, 0), new CameraSetting(-3, 0), new CameraSetting(-2, 0)], dark.Locked);
+    }
+
+    [Fact]
+    public void Metering_gain_is_a_quarter_of_the_range_on_the_step_grid()
+    {
+        Assert.Equal(63, Limits.MeteringGain);
+        Assert.Equal(60, new CameraLimits(Limits.Exposure, new ControlRange(0, 255, 10)).MeteringGain);
+        Assert.Equal(64, new CameraLimits(Limits.Exposure, new ControlRange(16, 208, 16)).MeteringGain);
+        Assert.Equal(0, new CameraLimits(Limits.Exposure, null).MeteringGain);
+    }
+
+    [Fact]
+    public void Gain_ladders_match_the_c920_sweep_and_probe_steps()
+    {
+        Assert.Equal([0, 31, 62, 93, 124, 155, 186, 217, 248, 255], Limits.GainLadder(8));
+        Assert.Equal([0, 63, 126, 189, 252, 255], Limits.GainLadder(4));
+        Assert.Equal([0, 60, 130, 190, 250], new CameraLimits(Limits.Exposure, new ControlRange(0, 255, 10)).GainLadder(4));
+        Assert.Empty(new CameraLimits(Limits.Exposure, null).GainLadder(8));
+    }
+
+    [Theory]
+    [InlineData(-13, -12)]
+    [InlineData(-12, -12)]
+    [InlineData(-11, -10)]
+    [InlineData(-9, -8)]
+    [InlineData(-3, -2)]
+    [InlineData(5, -2)]
+    public void Snap_rounds_to_the_nearest_value_on_the_grid_within_the_range(int value, int expected)
+        => Assert.Equal(expected, new ControlRange(-12, -2, 2).Snap(value));
+
+    [Fact]
+    public void Snap_never_goes_past_a_maximum_that_is_off_the_grid()
+    {
+        var range = new ControlRange(0, 255, 10);
+
+        Assert.Equal(250, range.Snap(255));
+        Assert.Equal(250, range.Snap(254));
+    }
+
+    [Fact]
+    public void A_reported_step_of_zero_is_a_step_of_one()
+        => Assert.Equal(1, new ControlRange(0, 10, 0).Step);
+
+    [Fact]
+    public void An_inverted_range_is_rejected()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => new ControlRange(5, 4, 1));
 
     private static double Read(FakeCamera camera, CameraSetting reported)
     {

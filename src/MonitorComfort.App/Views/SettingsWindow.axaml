@@ -140,6 +140,19 @@
               <ToggleSwitch Grid.Column="1" IsChecked="{Binding CameraEnabled}" OnContent="" OffContent=""
                             AutomationProperties.Name="Camera light meter" />
             </Grid>
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource ColumnSpacing}" IsVisible="{Binding HasCameraChoice}">
+              <TextBlock Classes="label" Text="Camera" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding Cameras}" SelectedItem="{Binding SelectedCamera}" HorizontalAlignment="Stretch"
+                        PlaceholderText="First usable camera" AutomationProperties.Name="Camera"
+                        IsEnabled="{Binding !CalibrateCommand.IsRunning}"
+                        ToolTip.Tip="Another camera needs calibrating again">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="ambient:CameraDevice">
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
             <TextBlock Classes="hint" Text="{Binding CalibrationSummary}" AutomationProperties.Name="Calibration" />
             <TextBlock Classes="hint" Text="{Binding CameraStatus}" AutomationProperties.LiveSetting="Polite"
                        AutomationProperties.Name="Camera light meter status"

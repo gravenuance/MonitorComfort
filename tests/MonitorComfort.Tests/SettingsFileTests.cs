@@ -50,6 +50,30 @@ public sealed class SettingsFileTests : IDisposable
     }
 
     [Fact]
+    public void The_light_meter_camera_loads_back()
+    {
+        var file = SettingsFiles.Settings(_directory);
+        file.Save(new ComfortSettings { CameraLight = new CameraLightSettings { CameraId = @"\?\usb#vid_046d&pid_082d" } });
+
+        Assert.Equal(@"\?\usb#vid_046d&pid_082d", file.Load().Value.CameraLight.CameraId);
+    }
+
+    [Fact]
+    public void A_calibration_saved_before_cameras_were_told_apart_loads_without_a_camera()
+    {
+        File.WriteAllText(
+            SettingsPath,
+            """{ "schemaVersion": 2, "cameraLight": { "enabled": true, "response": { "gamma": 1.25, "gainCurve": [] }, "calibration": { "bright": { "stops": -1.2, "brightness": 70 } } } }""");
+
+        var result = SettingsFiles.Settings(_directory).Load();
+
+        Assert.Null(result.Problem);
+        Assert.Null(result.Value.CameraLight.CameraId);
+        Assert.Equal(70, result.Value.CameraLight.Calibration!.Bright!.Brightness);
+        Assert.True(result.Value.CameraLight.IsReady);
+    }
+
+    [Fact]
     public void Corrupt_file_falls_back_to_defaults_and_keeps_a_copy()
     {
         File.WriteAllText(SettingsPath, "{ not json");

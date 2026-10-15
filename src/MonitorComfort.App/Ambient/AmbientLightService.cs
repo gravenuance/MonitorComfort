@@ -39,6 +39,9 @@ internal sealed class AmbientLightService : IAsyncDisposable
     /// <summary>Raised from a background thread after each new reading.</summary>
     public event EventHandler? ReadingChanged;
 
+    /// <summary>Raised from a background thread when the stored camera changes after a reading.</summary>
+    public event EventHandler? CameraRemembered;
+
     public AmbientReading? Latest => Volatile.Read(ref _latest);
 
     public string? LastError { get; private set; }
@@ -52,21 +55,42 @@ internal sealed class AmbientLightService : IAsyncDisposable
     private async Task<AmbientReading?> MeasureAsync(bool steady, CancellationToken cancellationToken)
     {
         Interlocked.Exchange(ref _lastAttemptTicks, _time.GetUtcNow().UtcTicks);
-        var response = _settings.Current.CameraLight.Response;
-        if (response is null)
+        var camera = _settings.Current.CameraLight;
+        if (camera.Response is not { } response)
         {
             LastError = "Calibrate the camera first.";
             return null;
         }
 
-        var result = await _meter.MeasureAsync(cancellationToken);
+        var result = await _meter.MeasureAsync(camera.CameraId, cancellationToken);
         if (result.Value is not { } sample)
         {
             LastError = result.Error;
             return null;
         }
 
+        Remember(camera.CameraId, result.Camera);
         return Record(sample, response, steady);
+    }
+
+    public Task<IReadOnlyList<CameraDevice>> ListCamerasAsync(CancellationToken cancellationToken) => _meter.ListAsync(cancellationToken);
+
+    /// <summary>Meters with <paramref name="camera"/> from now on; another camera than before needs calibrating again.</summary>
+    public void ChooseCamera(CameraDevice camera)
+    {
+        ArgumentNullException.ThrowIfNull(camera);
+        var before = _settings.Current.CameraLight;
+        var after = before.WithCamera(camera.Id);
+        if (after == before)
+        {
+            return;
+        }
+
+        _settings.Update(s => s with { CameraLight = s.CameraLight.WithCamera(camera.Id) });
+        Volatile.Write(ref _latest, null);
+        LastError = null;
+        _log.Information("Light meter camera changed to {Name} ({Id}); calibration cleared", camera.Name, camera.Id);
+        ReadingChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -78,17 +102,22 @@ internal sealed class AmbientLightService : IAsyncDisposable
         CalibrationLevel level, int comfortableBrightness, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         var response = _settings.Current.CameraLight.Response;
+        var startCameraId = _settings.Current.CameraLight.CameraId;
+        var cameraId = startCameraId;
         var existing = _settings.Current.CameraLight.Calibration ?? AmbientCalibration.Empty;
         if (response is null)
         {
             // Points measured against an earlier response sit on a different scale.
             existing = AmbientCalibration.Empty;
             progress?.Report("Measuring the camera…");
-            var sweep = await _meter.SweepAsync(cancellationToken);
+            var sweep = await _meter.SweepAsync(cameraId, cancellationToken);
             if (sweep.Value is not { } sweeps)
             {
                 return sweep.Error;
             }
+
+            // Without a choice the sweep used the first camera that can meter; the room reading must use the same one.
+            cameraId = sweep.Camera?.Id ?? cameraId;
 
             response = CameraResponse.Fit(sweeps.Exposure, sweeps.Gain);
             _log.Information(
@@ -103,7 +132,7 @@ internal sealed class AmbientLightService : IAsyncDisposable
         }
 
         progress?.Report("Measuring the room light…");
-        var result = await _meter.MeasureAsync(cancellationToken);
+        var result = await _meter.MeasureAsync(cameraId, cancellationToken);
         if (result.Value is not { } sample)
         {
             return result.Error;
@@ -122,13 +151,32 @@ internal sealed class AmbientLightService : IAsyncDisposable
             return error;
         }
 
+        // The camera may have been changed in settings meanwhile; this calibration is on the old one's scale.
+        if (!string.Equals(_settings.Current.CameraLight.CameraId, startCameraId, StringComparison.OrdinalIgnoreCase))
+        {
+            _log.Information("Discarded the {Level} calibration: the camera changed while it ran", level);
+            return "The camera changed. Calibrate again.";
+        }
+
         _settings.Update(s => s with
         {
-            CameraLight = s.CameraLight with { Enabled = true, Response = response, Calibration = calibration },
+            CameraLight = s.CameraLight with { Enabled = true, CameraId = result.Camera?.Id ?? cameraId, Response = response, Calibration = calibration },
         });
-        _log.Information("Calibrated the light meter ({Level}): {Calibration}", level, calibration);
+        _log.Information("Calibrated the light meter ({Level}) with {Camera}: {Calibration}", level, result.Camera?.Name, calibration);
         ReadingChanged?.Invoke(this, EventArgs.Empty);
         return null;
+    }
+
+    private void Remember(string? storedId, CameraDevice? used)
+    {
+        if (used is null || string.Equals(storedId, used.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _settings.Update(s => s with { CameraLight = s.CameraLight.AfterReadingWith(storedId, used.Id) });
+        _log.Information("Light meter camera is {Name} ({Id})", used.Name, used.Id);
+        CameraRemembered?.Invoke(this, EventArgs.Empty);
     }
 
     public async ValueTask DisposeAsync()

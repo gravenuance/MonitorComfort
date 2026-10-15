@@ -52,7 +52,8 @@ public sealed record CameraResponse(double Gamma, IReadOnlyList<GainPoint> GainC
 
     /// <summary>
     /// Fits the response from an exposure sweep at fixed gain and a gain sweep at fixed exposure,
-    /// both of an unchanging scene. Null when the sweeps don't give a usable fit.
+    /// both of an unchanging scene. An empty gain sweep means the camera has no gain control. Null when the
+    /// sweeps don't give a usable fit.
     /// </summary>
     public static CameraResponse? Fit(
         IReadOnlyList<(int ExposureLog2, double MeanY)> exposureSweep,
@@ -76,6 +77,11 @@ public sealed record CameraResponse(double Gamma, IReadOnlyList<GainPoint> GainC
         if (gamma is < MinimumGamma or > MaximumGamma || double.IsNaN(gamma))
         {
             return null;
+        }
+
+        if (gainSweep.Count == 0)
+        {
+            return new CameraResponse(gamma, []);
         }
 
         var gains = gainSweep.Where(p => p.MeanY > 0).OrderBy(p => p.Gain).ToList();

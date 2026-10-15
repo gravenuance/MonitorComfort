@@ -226,6 +226,7 @@ internal static class MediaFoundation
     public static readonly Guid SourceType = new("c60ac5fe-252a-478f-a0ef-bc8fa5f7cad3");
     public static readonly Guid SourceTypeVideoCapture = new("8ac3587a-4ae7-42d8-99e0-0a6013eef90f");
     public static readonly Guid FriendlyName = new("60d0e559-52f8-4fa2-bbce-acdb34a8ec01");
+    public static readonly Guid SymbolicLink = new("58f0aad8-22bf-4f8a-bb3d-d2c4978c6e2f");
     public static readonly Guid EnableVideoProcessing = new("fb394f3d-ccf1-42ee-bbb3-f9b845d5681d");
     public static readonly Guid MajorType = new("48eba18e-f8c9-4687-bf11-0a74c9f96a8f");
     public static readonly Guid SubType = new("f7e34c9a-42e8-4714-b74b-cb29d72c35e5");

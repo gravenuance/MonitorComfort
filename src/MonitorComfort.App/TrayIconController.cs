@@ -90,6 +90,7 @@ internal sealed class TrayIconController : IDisposable
             _window.Closing += OnWindowClosing;
         }
 
+        _viewModel?.RefreshCamerasCommand.Execute(null);
         _window.Show();
         _window.WindowState = WindowState.Normal;
         _window.Activate();

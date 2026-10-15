@@ -55,12 +55,45 @@ public sealed record CameraLightSettings
     /// <summary>Brightness change per doubling or halving of the light while only one level is calibrated.</summary>
     public double BrightnessPerStop { get; init; } = 10;
 
+    /// <summary>The camera the response and calibration were measured with; null until there is one.</summary>
+    public string? CameraId { get; init; }
+
     public CameraResponse? Response { get; init; }
 
     public AmbientCalibration? Calibration { get; init; }
 
     [JsonIgnore]
     public bool IsReady => Enabled && Response is not null && Calibration is { HasAnyPoint: true };
+
+    /// <summary>
+    /// Uses another camera from now on; the response and calibration are dropped, being on the old camera's scale.
+    /// A calibration not yet assigned to a camera is adopted by the chosen one instead.
+    /// </summary>
+    public CameraLightSettings WithCamera(string cameraId)
+    {
+        ArgumentNullException.ThrowIfNull(cameraId);
+        if (CameraId is null)
+        {
+            return this with { CameraId = cameraId };
+        }
+
+        return string.Equals(CameraId, cameraId, StringComparison.OrdinalIgnoreCase)
+            ? this
+            : this with { CameraId = cameraId, Response = null, Calibration = null };
+    }
+
+    /// <summary>
+    /// Records that a reading expected from <paramref name="expectedId"/> came from <paramref name="usedId"/>, keeping
+    /// the calibration: one from before cameras were told apart was made with the first camera that could meter, and a
+    /// webcam on another USB port gets a new id. Nothing changes if the camera was changed in settings meanwhile.
+    /// </summary>
+    public CameraLightSettings AfterReadingWith(string? expectedId, string usedId)
+    {
+        ArgumentNullException.ThrowIfNull(usedId);
+        return string.Equals(CameraId, expectedId, StringComparison.OrdinalIgnoreCase) && Response is not null
+            ? this with { CameraId = usedId }
+            : this;
+    }
 }
 
 public sealed record FullscreenSettings

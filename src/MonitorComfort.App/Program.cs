@@ -87,7 +87,7 @@ internal static class Program
 
         if (args.Contains("--probe-light", StringComparer.OrdinalIgnoreCase))
         {
-            var result = Task.Run(() => host.Meter.ProbeAsync(30, CancellationToken.None)).GetAwaiter().GetResult();
+            var result = Task.Run(() => host.Meter.ProbeAsync(host.Settings.Current.CameraLight.CameraId, 30, CancellationToken.None)).GetAwaiter().GetResult();
             if (result.Value is not { } probe)
             {
                 log.Error("Probe light: {Error}", result.Error);
