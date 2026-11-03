@@ -139,7 +139,7 @@ public sealed class AmbientPlanningTests
     private static readonly DateTimeOffset NightUtc = new(2026, 12, 21, 22, 30, 0, TimeSpan.Zero);
     private static readonly string[] Monitors = ["ACR0B70", "SAM08DA"];
 
-    // Night profile alone would be 15% / 3400K; neutral room lights would make it 40% / 3500K.
+    // Night profile alone would be 15% / 3400K; neutral room lights would make it 40% / 3676K.
     private static readonly ComfortSettings Calibrated = new()
     {
         Location = Stockholm,
@@ -150,14 +150,32 @@ public sealed class AmbientPlanningTests
         => ComfortPlanner.Plan(NightUtc, Winter, settings, Stockholm, Monitors, fullscreen, reading);
 
     [Fact]
-    public void Fresh_reading_sets_brightness_and_limits_warmth_to_the_measured_light()
+    public void Fresh_reading_sets_brightness_and_blends_warmth_with_the_measured_light()
     {
-        // 1 stop above calibration -> 55%; 4100K light -> no warmer than 3600K.
+        // 1 stop above calibration -> 55%; the night's 3400K averaged with 4100K: 269.010 mireds = 3717.3K.
         var plan = Plan(Calibrated, new AmbientReading(NightUtc.AddMinutes(-5), 3.4, 4100));
 
         Assert.Equal(AmbientSource.Camera, plan.Source);
         Assert.Equal(55, plan.Brightness);
-        Assert.Equal(3600, plan.Kelvin);
+        Assert.Equal(3717, plan.Kelvin);
+    }
+
+    [Fact]
+    public void Warm_measured_light_at_night_makes_the_screens_warmer()
+    {
+        // The night's 3400K averaged with 2900K: 319.473 mireds = 3130.2K.
+        Assert.Equal(3130, Plan(Calibrated, new AmbientReading(NightUtc.AddMinutes(-5), 3.4, 2900)).Kelvin);
+    }
+
+    [Fact]
+    public void Warm_measured_light_at_midday_leaves_the_day_colour_alone()
+    {
+        var noon = new DateTimeOffset(2026, 6, 21, 11, 0, 0, TimeSpan.Zero);
+
+        var plan = ComfortPlanner.Plan(noon, Winter, Calibrated, Stockholm, Monitors, null, new AmbientReading(noon.AddMinutes(-5), 3.4, 3000));
+
+        Assert.Equal(AmbientSource.Camera, plan.Source);
+        Assert.Equal(6500, plan.Kelvin);
     }
 
     [Fact]
@@ -200,7 +218,7 @@ public sealed class AmbientPlanningTests
 
         Assert.Equal(70, plan.Targets.Single(t => t.MonitorId == "ACR0B70").Brightness);
         Assert.Equal(60, plan.Targets.Single(t => t.MonitorId == "SAM08DA").Brightness);
-        Assert.Equal(3600, plan.Kelvin);
+        Assert.Equal(3717, plan.Kelvin);
     }
 
     [Fact]

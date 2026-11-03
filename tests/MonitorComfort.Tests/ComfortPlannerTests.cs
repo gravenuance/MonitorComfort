@@ -72,12 +72,21 @@ public sealed class ComfortPlannerTests
     [Fact]
     public void Lit_room_at_night_keeps_brightness_up_and_colour_near_the_lights()
     {
-        // Neutral 4000K tubes at normal level: at least 40% and no warmer than 3500K.
+        // Neutral 4000K tubes at normal level: at least 40%, and the night's 3400K averaged with 4000K in mireds.
         var plan = Plan(Utc(2026, 12, 21, 22, 30), Winter, NeutralRoomLight);
 
         Assert.Equal(AmbientSource.RoomModel, plan.Source);
         Assert.Equal(40, plan.Brightness);
-        Assert.Equal(3500, plan.Kelvin);
+        Assert.Equal(3676, plan.Kelvin);
+    }
+
+    [Fact]
+    public void Warm_lights_at_night_make_the_screens_warmer()
+    {
+        // The night's 3400K averaged with 2700K bulbs: 332.244 mireds = 3009.8K.
+        var settings = NeutralRoomLight with { RoomLight = NeutralRoomLight.RoomLight with { Colour = LightColour.Warm } };
+
+        Assert.Equal(3010, Plan(Utc(2026, 12, 21, 22, 30), Winter, settings).Kelvin);
     }
 
     [Fact]

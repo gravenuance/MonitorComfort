@@ -33,9 +33,25 @@ public sealed class AmbientSmoothingTests
     }
 
     [Fact]
+    public void A_moderate_change_moves_the_colour_at_most_one_step()
+    {
+        Assert.Equal(3600, AmbientSmoothing.Next(At(0, -1.5, 3300), At(10, -2.1, 4200)).Kelvin);
+        Assert.Equal(3000, AmbientSmoothing.Next(At(0, -1.5, 3300), At(10, -2.1, 2500)).Kelvin);
+    }
+
+    [Theory]
+    [InlineData(null, 4200, 4200)]
+    [InlineData(3300, null, null)]
+    public void A_moderate_change_with_an_unknown_colour_takes_the_new_one(int? held, int? raw, int? expected)
+    {
+        Assert.Equal(expected, AmbientSmoothing.Next(At(0, -1.5, held), At(10, -2.1, raw)).Kelvin);
+    }
+
+    [Fact]
     public void A_large_change_is_followed_at_once()
     {
         Assert.Equal(At(10, -6.5), AmbientSmoothing.Next(At(0, -1.5), At(10, -6.5)));
+        Assert.Equal(At(10, 0.5, 5000), AmbientSmoothing.Next(At(0, -1.5, 3000), At(10, 0.5, 5000)));
     }
 
     [Fact]

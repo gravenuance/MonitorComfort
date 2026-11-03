@@ -17,14 +17,23 @@ Requires Windows 10 version 2004 or later, 64-bit.
 |---|---|
 | Sun elevation | Blends from the **day** profile to **evening** across civil twilight (sun from +6° to −6°). |
 | Bedtime | Blends from **evening** to **night** over 45 minutes after *night starts*, and back after *night ends*. |
-| Room lights | While modelled lights are on (from sunset plus an offset, until sunrise or a set time), brightness stays at or above a floor for the light level, and warmth stays within 500K of the light's colour. |
-| Camera light meter (opt-in) | Every 10 minutes, the webcam measures the room light at a fixed gain, and changes too small to notice are ignored. Brightness follows the line through your bright-room and dim-room calibrations, and warmth stays near the light's colour. This replaces the room-light model while readings are fresh (30 minutes). |
+| Room lights | While modelled lights are on (from sunset plus an offset, until sunrise or a set time), brightness stays at or above a floor for the light level, and warmth follows the light's colour (see *Warmth and the room* below). |
+| Camera light meter (opt-in) | Every 10 minutes, the webcam measures the room light at a fixed gain, and changes too small to notice are ignored. Brightness follows the line through your bright-room and dim-room calibrations, and warmth follows the light's colour, moving at most 300K per reading. This replaces the room-light model while readings are fresh (30 minutes). |
 | Full-screen | After 3 s settled, the other monitors drop to a share of their scheduled brightness (default 20%). |
 | Per monitor | A brightness offset evens out panels; any monitor can be left alone. |
 | Display changes | Within a second of Windows reporting a monitor being connected, removed, swapped, woken or rearranged (a wake Windows doesn't report is noticed within 15 s), the app checks what each monitor supports over DDC/CI and adjusts it. A monitor that doesn't answer yet is retried after about 2, 5, 10 and 20 s, then after 1, 2, 4, 8 and 16 minutes, then every 30 minutes, until the displays change again. While the display is off nothing is sent to the monitors, and when it comes back on they are checked as if newly connected. The settings window shows each monitor as *Brightness and colour*, *Brightness only*, or not answering DDC/CI. |
 
 Defaults: day 60% / 6500K, evening 35% / 4500K, night 15% / 3400K, night 22:30–07:00,
 neutral 4000K room lights on from sunset to sunrise.
+
+### Warmth and the room
+
+Once the sun is down, the screens' warmth is the average of the schedule's and the room
+light's, so the screens follow a warm lamp down and a cool ceiling light up. The room's share
+grows from none in daylight to half when the sun is 6° below the horizon, so it follows the
+seasons without set hours. When the two differ by more than 1000K, the room's share fades out,
+and from 1500K the schedule's warmth is used. Whatever the blend, the screens are never more than
+500K warmer than the room's colour, so they don't look orange in a cool-lit room.
 
 The app only writes a value when it moves by 2 or more. Some monitors store every DDC/CI
 write in their own memory, which wears with use.

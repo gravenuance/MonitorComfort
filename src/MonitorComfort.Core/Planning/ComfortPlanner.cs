@@ -40,9 +40,6 @@ public static class ComfortPlanner
     private const double DarkElevation = -6.0;
     private const double DayElevation = 6.0;
 
-    // A screen much warmer than the room's light reads as orange; stay within this of it.
-    private const int RoomLightKelvinMargin = 500;
-
     public static ComfortPlan Plan(
         DateTimeOffset now,
         TimeZoneInfo timeZone,
@@ -70,19 +67,19 @@ public static class ComfortPlanner
         AmbientSource source;
         if (camera.IsReady && ambient is not null && AmbientMapping.IsFresh(ambient, now))
         {
-            // The measurement replaces the schedule's brightness; the schedule still decides how warm night gets.
+            // The measurement replaces the schedule's brightness; its colour is blended with the schedule's.
             source = AmbientSource.Camera;
             brightness = AmbientMapping.Brightness(camera.Calibration!, ambient.LightStops, camera.BrightnessPerStop);
             if (AmbientMapping.ReliableKelvin(camera.Calibration!, ambient) is { } lightKelvin)
             {
-                kelvin = Math.Max(kelvin, lightKelvin - RoomLightKelvinMargin);
+                kelvin = RoomWarmth.Fit(kelvin, ColourTemperature.Clamp(lightKelvin), daylight);
             }
         }
         else if (settings.RoomLight.Enabled && IsRoomLit(now, timeZone, settings.RoomLight, location))
         {
             source = AmbientSource.RoomModel;
             brightness = Math.Max(brightness, MinimumBrightness(settings.RoomLight.Level));
-            kelvin = Math.Max(kelvin, LightKelvin(settings.RoomLight.Colour) - RoomLightKelvinMargin);
+            kelvin = RoomWarmth.Fit(kelvin, LightKelvin(settings.RoomLight.Colour), daylight);
         }
         else
         {
