@@ -169,6 +169,16 @@ public sealed class SettingsFileTests : IDisposable
     }
 
     [Fact]
+    public void Migration_reads_a_missing_off_rule_as_the_old_sunrise_default()
+    {
+        var root = JsonNode.Parse("""{ "schemaVersion": 2, "roomLight": { "level": "Dim" } }""")!.AsObject();
+
+        var roomLight = SettingsFiles.MigrateSettings(root, 2)["roomLight"]!.AsObject();
+
+        Assert.Equal("07:00:00", roomLight["offTime"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void Migration_leaves_a_file_without_room_light_alone()
     {
         var root = JsonNode.Parse("""{ "schemaVersion": 2, "day": { "brightness": 70, "kelvin": 6000 } }""")!.AsObject();
@@ -181,7 +191,7 @@ public sealed class SettingsFileTests : IDisposable
     [Fact]
     public void Fields_missing_from_the_file_keep_their_defaults()
     {
-        File.WriteAllText(SettingsPath, """{ "schemaVersion": 1, "day": { "brightness": 70, "kelvin": 6000 }, "roomLight": { "level": "Dim" } }""");
+        File.WriteAllText(SettingsPath, """{ "schemaVersion": 3, "day": { "brightness": 70, "kelvin": 6000 }, "roomLight": { "level": "Dim" } }""");
 
         var loaded = SettingsFiles.Settings(_directory).Load().Value;
 

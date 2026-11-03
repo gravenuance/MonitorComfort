@@ -71,6 +71,10 @@ public static class AmbientMapping
     /// <summary>Below this many stops under the brightest calibration, the camera mostly sees the screens' own glow.</summary>
     public const double ColourReliableBelowReference = 3.0;
 
+    // A driver's white balance outside this is a fault or another unit, not a room light's colour.
+    private const int LowestPlausibleKelvin = 1500;
+    private const int HighestPlausibleKelvin = 10000;
+
     private const int LowestBrightness = 5;
     private const int HighestBrightness = 100;
 
@@ -98,12 +102,14 @@ public static class AmbientMapping
         return (int)Math.Clamp(Math.Round(brightness), LowestBrightness, HighestBrightness);
     }
 
-    /// <summary>The light's colour, when the room is bright enough for the camera to judge it.</summary>
+    /// <summary>The light's colour, when the room is bright enough for the camera to judge it and the value is plausible.</summary>
     public static int? ReliableKelvin(AmbientCalibration calibration, AmbientReading reading)
     {
         ArgumentNullException.ThrowIfNull(calibration);
         ArgumentNullException.ThrowIfNull(reading);
-        return calibration.BrightestStops is { } reference && reading.LightStops >= reference - ColourReliableBelowReference
+        return calibration.BrightestStops is { } reference
+            && reading.LightStops >= reference - ColourReliableBelowReference
+            && reading.Kelvin is >= LowestPlausibleKelvin and <= HighestPlausibleKelvin
             ? reading.Kelvin
             : null;
     }

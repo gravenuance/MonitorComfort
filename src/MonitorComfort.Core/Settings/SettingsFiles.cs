@@ -33,7 +33,8 @@ public static class SettingsFiles
         // 2 -> 3: sunset/sunrise switching becomes fixed times; "off at sunrise" becomes 07:00.
         if (fromVersion < 3 && root["roomLight"] is JsonObject roomLight)
         {
-            if (IsSunriseRule(roomLight["offAt"]))
+            // Sunrise was the default, so a file without the rule meant it too.
+            if (roomLight["offAt"] is null || IsSunriseRule(roomLight["offAt"]))
             {
                 roomLight["offTime"] = "07:00:00";
             }

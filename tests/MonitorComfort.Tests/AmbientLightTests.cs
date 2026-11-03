@@ -130,6 +130,17 @@ public sealed class AmbientLightTests
         Assert.Equal(4000, AmbientMapping.ReliableKelvin(calibration, new AmbientReading(DateTimeOffset.UnixEpoch, -0.6, 4000)));
         Assert.Null(AmbientMapping.ReliableKelvin(calibration, new AmbientReading(DateTimeOffset.UnixEpoch, -0.7, 4000)));
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1400)]
+    [InlineData(12000)]
+    public void An_implausible_white_balance_is_not_trusted(int kelvin)
+    {
+        var calibration = new AmbientCalibration(new CalibrationPoint(2.4, 45), null);
+
+        Assert.Null(AmbientMapping.ReliableKelvin(calibration, new AmbientReading(DateTimeOffset.UnixEpoch, 2.4, kelvin)));
+    }
 }
 
 public sealed class AmbientPlanningTests

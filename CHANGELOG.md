@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Changed
-- Room lights now switch on and off at times you set (16:00 and 23:00 to begin with) instead of following sunset and sunrise. A light that was set to go off at sunrise goes off at 07:00 after the update, and one with a set off time keeps it.
+- Room lights now switch on and off at times you set (16:00 and 23:00 to begin with) instead of following sunset and sunrise. After the update every room light switches on at 16:00, whatever its old offset from sunset, so set your own time. A light that was set to go off at sunrise goes off at 07:00, and one with a set off time keeps it. Settings saved by this version can't be read by 0.5.0 or older, which would start from defaults.
 - A new **Brightness curve** option for room lights: the brightness floor starts low when the lights go on, peaks in the middle of the evening and eases off towards bedtime.
 - After dark, the screens' warmth is the average of the schedule's and the room light's, so a warm lamp now makes them warmer as well as a cool light cooler. The room counts more as the sun goes down, a room colour far from the schedule counts less, and the screens are still never more than 500K warmer than the room. With the camera, warmth moves at most 300K per reading while the light drifts. See `docs/adr/0006`.
 - Settings has a new look: amber on graphite in dark mode, with a matching light mode. The title bar blends in, and a status dot shows whether the app is adjusting, paused or needs you.
