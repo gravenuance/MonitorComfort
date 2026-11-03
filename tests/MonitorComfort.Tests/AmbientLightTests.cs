@@ -143,6 +143,7 @@ public sealed class AmbientPlanningTests
     private static readonly ComfortSettings Calibrated = new()
     {
         Location = Stockholm,
+        RoomLight = new RoomLightSettings { OffTime = new TimeOnly(2, 0) },
         CameraLight = new CameraLightSettings { Enabled = true, Response = AmbientLightTests.Response, Calibration = new AmbientCalibration(new CalibrationPoint(2.4, 45), null) },
     };
 

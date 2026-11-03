@@ -142,31 +142,31 @@
               <ToggleSwitch Grid.Column="1" IsChecked="{Binding RoomLightEnabled}" OnContent="" OffContent=""
                             AutomationProperties.Name="Room lights" />
             </Grid>
-            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" IsVisible="{Binding RoomLightEnabled}"
+            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" IsVisible="{Binding RoomLightEnabled}"
                   ColumnSpacing="{StaticResource ColumnSpacing}" RowSpacing="{StaticResource RowSpacing}">
-              <TextBlock Classes="label" Text="On after sunset" />
-              <NumericUpDown Grid.Column="1" Grid.ColumnSpan="2" Value="{Binding LightsOnOffset}" Minimum="-180" Maximum="180" Increment="5"
-                             FormatString="0 min" AutomationProperties.Name="Minutes after sunset the lights turn on" />
+              <TextBlock Classes="label" Text="On at" />
+              <TimePicker Grid.Column="1" Grid.ColumnSpan="2" SelectedTime="{Binding LightsOnTime}" ClockIdentifier="24HourClock"
+                          MinuteIncrement="5" AutomationProperties.Name="Lights-on time" />
 
-              <TextBlock Grid.Row="1" Classes="label" Text="Off" />
-              <ComboBox Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding LightsOffIndex}" HorizontalAlignment="Stretch"
-                        AutomationProperties.Name="Lights turn off">
-                <ComboBoxItem Content="At sunrise" />
-                <ComboBoxItem Content="At a set time" />
-              </ComboBox>
-              <TimePicker Grid.Row="1" Grid.Column="2" SelectedTime="{Binding LightsOffTime}" ClockIdentifier="24HourClock" MinuteIncrement="5"
-                          IsVisible="{Binding LightsOffAtTime}" AutomationProperties.Name="Lights-off time" />
+              <TextBlock Grid.Row="1" Classes="label" Text="Off at" />
+              <TimePicker Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" SelectedTime="{Binding LightsOffTime}" ClockIdentifier="24HourClock"
+                          MinuteIncrement="5" AutomationProperties.Name="Lights-off time" />
 
-              <TextBlock Grid.Row="2" Classes="label" Text="Colour" />
-              <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" SelectedIndex="{Binding LightColourIndex}" HorizontalAlignment="Stretch"
+              <TextBlock Grid.Row="2" Classes="label" Text="Brightness curve" />
+              <ToggleSwitch Grid.Row="2" Grid.Column="2" IsChecked="{Binding LightCurve}" OnContent="" OffContent=""
+                            ToolTip.Tip="Lights brighten towards the middle of the evening"
+                            AutomationProperties.Name="Brightness curve" />
+
+              <TextBlock Grid.Row="3" Classes="label" Text="Colour" />
+              <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" SelectedIndex="{Binding LightColourIndex}" HorizontalAlignment="Stretch"
                         AutomationProperties.Name="Light colour">
                 <ComboBoxItem Content="Warm white (2700K)" />
                 <ComboBoxItem Content="Neutral white (4000K)" />
                 <ComboBoxItem Content="Daylight (6500K)" />
               </ComboBox>
 
-              <TextBlock Grid.Row="3" Classes="label" Text="Level" />
-              <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" SelectedIndex="{Binding LightLevelIndex}" HorizontalAlignment="Stretch"
+              <TextBlock Grid.Row="4" Classes="label" Text="Level" />
+              <ComboBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" SelectedIndex="{Binding LightLevelIndex}" HorizontalAlignment="Stretch"
                         AutomationProperties.Name="Light level">
                 <ComboBoxItem Content="Dim" />
                 <ComboBoxItem Content="Normal" />

@@ -108,17 +108,13 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public partial bool RoomLightEnabled { get; set; }
 
     [ObservableProperty]
-    public partial decimal? LightsOnOffset { get; set; }
-
-    /// <summary>Index into "At sunrise", "At a set time".</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LightsOffAtTime))]
-    public partial int LightsOffIndex { get; set; }
-
-    public bool LightsOffAtTime => LightsOffIndex == (int)LightsOff.AtTime;
+    public partial TimeSpan? LightsOnTime { get; set; }
 
     [ObservableProperty]
     public partial TimeSpan? LightsOffTime { get; set; }
+
+    [ObservableProperty]
+    public partial bool LightCurve { get; set; }
 
     /// <summary>Index into "Warm", "Neutral", "Daylight".</summary>
     [ObservableProperty]
@@ -312,7 +308,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(e);
         base.OnPropertyChanged(e);
         if (_loading || e.PropertyName is nameof(StatusText) or nameof(NeedsAttention) or nameof(IsActive) or nameof(IsPaused)
-            or nameof(PauseLabel) or nameof(IsCameraBusy) or nameof(LocationMessage) or nameof(SunTimes) or nameof(LightsOffAtTime) or nameof(CameraStatus)
+            or nameof(PauseLabel) or nameof(IsCameraBusy) or nameof(LocationMessage) or nameof(SunTimes) or nameof(CameraStatus)
             or nameof(CalibrationSummary) or nameof(HasCameraChoice))
         {
             return;
@@ -375,9 +371,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             NightStart = settings.NightStart.ToTimeSpan();
             NightEnd = settings.NightEnd.ToTimeSpan();
             RoomLightEnabled = settings.RoomLight.Enabled;
-            LightsOnOffset = settings.RoomLight.OnMinutesAfterSunset;
-            LightsOffIndex = (int)settings.RoomLight.OffAt;
+            LightsOnTime = settings.RoomLight.OnTime.ToTimeSpan();
             LightsOffTime = settings.RoomLight.OffTime.ToTimeSpan();
+            LightCurve = settings.RoomLight.Curve;
             LightColourIndex = (int)settings.RoomLight.Colour;
             LightLevelIndex = (int)settings.RoomLight.Level;
             DimOtherMonitors = settings.Fullscreen.DimOtherMonitors;
@@ -414,9 +410,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
                 RoomLight = current.RoomLight with
                 {
                     Enabled = RoomLightEnabled,
-                    OnMinutesAfterSunset = (int)(LightsOnOffset ?? 0),
-                    OffAt = (LightsOff)LightsOffIndex,
+                    OnTime = LightsOnTime is { } on ? TimeOnly.FromTimeSpan(on) : current.RoomLight.OnTime,
                     OffTime = LightsOffTime is { } off ? TimeOnly.FromTimeSpan(off) : current.RoomLight.OffTime,
+                    Curve = LightCurve,
                     Colour = (LightColour)LightColourIndex,
                     Level = (LightLevel)LightLevelIndex,
                 },

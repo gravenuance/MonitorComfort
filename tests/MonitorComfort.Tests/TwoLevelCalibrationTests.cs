@@ -95,7 +95,7 @@ public sealed class TwoLevelCalibrationTests
             var result = SettingsFiles.Settings(directory).Load();
 
             Assert.True(result.Migrated);
-            Assert.Equal(2, result.Value.SchemaVersion);
+            Assert.Equal(ComfortSettings.CurrentSchemaVersion, result.Value.SchemaVersion);
             Assert.Equal(new CalibrationPoint(-0.55, 60), result.Value.CameraLight.Calibration!.Bright);
             Assert.Null(result.Value.CameraLight.Calibration.Dim);
             Assert.True(result.Value.CameraLight.Enabled);

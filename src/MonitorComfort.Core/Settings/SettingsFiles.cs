@@ -30,8 +30,27 @@ public static class SettingsFiles
             };
         }
 
+        // 2 -> 3: sunset/sunrise switching becomes fixed times; "off at sunrise" becomes 07:00.
+        if (fromVersion < 3 && root["roomLight"] is JsonObject roomLight)
+        {
+            if (IsSunriseRule(roomLight["offAt"]))
+            {
+                roomLight["offTime"] = "07:00:00";
+            }
+
+            roomLight.Remove("offAt");
+            roomLight.Remove("onMinutesAfterSunset");
+            roomLight["onTime"] ??= "16:00:00";
+        }
+
         return root;
     }
+
+    // Enums are written as names, but a hand-edited file may hold the number (AtSunrise is 0).
+    private static bool IsSunriseRule(JsonNode? offAt) => offAt is JsonValue value
+        && (value.TryGetValue<string>(out var name)
+            ? string.Equals(name, "AtSunrise", StringComparison.OrdinalIgnoreCase)
+            : value.TryGetValue<int>(out var number) && number == 0);
 
     public static VersionedJsonFile<OriginalMonitorValues> Originals(string directory)
         => new(

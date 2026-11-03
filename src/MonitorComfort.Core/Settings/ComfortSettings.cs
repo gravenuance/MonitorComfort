@@ -8,12 +8,6 @@ namespace MonitorComfort.Core.Settings;
 /// <summary>Brightness (0–100) and white point (kelvin) for one part of the day.</summary>
 public sealed record DisplayProfile(int Brightness, int Kelvin);
 
-public enum LightsOff
-{
-    AtSunrise,
-    AtTime,
-}
-
 public enum LightColour
 {
     Warm,
@@ -28,16 +22,18 @@ public enum LightLevel
     Bright,
 }
 
-/// <summary>Artificial room light that switches on around sunset.</summary>
+/// <summary>Artificial room light that is on between two local times.</summary>
 public sealed record RoomLightSettings
 {
     public bool Enabled { get; init; } = true;
 
-    public int OnMinutesAfterSunset { get; init; }
-
-    public LightsOff OffAt { get; init; } = LightsOff.AtSunrise;
+    /// <summary>When the lights go on; the window may cross midnight, and equal on and off times mean never lit.</summary>
+    public TimeOnly OnTime { get; init; } = new(16, 0);
 
     public TimeOnly OffTime { get; init; } = new(23, 0);
+
+    /// <summary>Whether the brightness floor swells towards the middle of the lit window.</summary>
+    public bool Curve { get; init; }
 
     public LightColour Colour { get; init; } = LightColour.Neutral;
 
@@ -118,8 +114,8 @@ public sealed record MonitorSettings
 
 public sealed record ComfortSettings
 {
-    /// <summary>2: the camera calibration holds a bright and a dim point.</summary>
-    public const int CurrentSchemaVersion = 2;
+    /// <summary>3: room lights run between an on and an off time instead of sunset and sunrise.</summary>
+    public const int CurrentSchemaVersion = 3;
 
     private readonly MonitorSettingsMap _monitors = MonitorSettingsMap.Empty;
 
@@ -222,10 +218,7 @@ public sealed record ComfortSettings
             Day = Profile("Day", Day, defaults.Day),
             Evening = Profile("Evening", Evening, defaults.Evening),
             Night = Profile("Night", Night, defaults.Night),
-            RoomLight = roomLight with
-            {
-                OnMinutesAfterSunset = Clamp("Lights-on offset", roomLight.OnMinutesAfterSunset, -180, 180),
-            },
+            RoomLight = roomLight,
             Fullscreen = fullscreen with
             {
                 OtherMonitorBrightnessPercent = Clamp(

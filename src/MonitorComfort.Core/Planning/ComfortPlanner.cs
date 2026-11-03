@@ -55,7 +55,7 @@ public static class ComfortPlanner
         ArgumentNullException.ThrowIfNull(monitorIds);
 
         var daylight = Smoothstep(DarkElevation, DayElevation, SolarCalculator.Elevation(now, location));
-        var localTime = TimeOnly.FromTimeSpan(TimeZoneInfo.ConvertTime(now, timeZone).TimeOfDay);
+        var localTime = LocalTime(now, timeZone);
         var nightWeight = NightWeight(localTime, settings.NightStart, settings.NightEnd);
 
         var darkBrightness = Lerp(settings.Evening.Brightness, settings.Night.Brightness, nightWeight);
@@ -75,10 +75,16 @@ public static class ComfortPlanner
                 kelvin = RoomWarmth.Fit(kelvin, ColourTemperature.Clamp(lightKelvin), daylight);
             }
         }
-        else if (settings.RoomLight.Enabled && IsRoomLit(now, timeZone, settings.RoomLight, location))
+        else if (settings.RoomLight.Enabled && LitFraction(localTime, settings.RoomLight) is { } litFraction)
         {
             source = AmbientSource.RoomModel;
-            brightness = Math.Max(brightness, MinimumBrightness(settings.RoomLight.Level));
+            var floor = MinimumBrightness(settings.RoomLight.Level);
+            if (settings.RoomLight.Curve)
+            {
+                floor = (int)Math.Round(floor * RoomLightCurve.Factor(litFraction));
+            }
+
+            brightness = Math.Max(brightness, floor);
             kelvin = RoomWarmth.Fit(kelvin, LightKelvin(settings.RoomLight.Colour), daylight);
         }
         else
@@ -138,43 +144,25 @@ public static class ComfortPlanner
         return sinceEnd < ramp ? weightAtEnd * (1.0 - (sinceEnd / ramp)) : 0.0;
     }
 
-    /// <summary>Whether modelled room lights are on: from sunset (plus offset) until sunrise or the set off time.</summary>
-    public static bool IsRoomLit(DateTimeOffset now, TimeZoneInfo timeZone, RoomLightSettings roomLight, GeoLocation location)
+    /// <summary>Whether modelled room lights are on: from the on time up to, not including, the off time, in local time.</summary>
+    public static bool IsRoomLit(DateTimeOffset now, TimeZoneInfo timeZone, RoomLightSettings roomLight)
     {
         ArgumentNullException.ThrowIfNull(timeZone);
+        return LitFraction(LocalTime(now, timeZone), roomLight) is not null;
+    }
+
+    /// <summary>
+    /// How far through the lit window <paramref name="localTime"/> is, 0 at the on time up to just under 1 at
+    /// the off time; null while the lights are off. The window may cross midnight.
+    /// </summary>
+    public static double? LitFraction(TimeOnly localTime, RoomLightSettings roomLight)
+    {
         ArgumentNullException.ThrowIfNull(roomLight);
 
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, timeZone).DateTime);
-        foreach (var day in (ReadOnlySpan<DateOnly>)[today.AddDays(-1), today])
-        {
-            var events = SolarCalculator.Events(day, location);
-            switch (events.Kind)
-            {
-                case DayKind.PolarNight when day == today:
-                    return true;
-                case DayKind.PolarNight or DayKind.PolarDay:
-                    continue;
-                case DayKind.Normal:
-                    break;
-                default:
-                    throw new InvalidOperationException($"Unhandled day kind {events.Kind}");
-            }
-
-            var on = events.Sunset!.Value.AddMinutes(roomLight.OnMinutesAfterSunset);
-            var off = roomLight.OffAt switch
-            {
-                LightsOff.AtSunrise => SolarCalculator.Events(day.AddDays(1), location).Sunrise ?? on.AddDays(1),
-                LightsOff.AtTime => NextLocal(events.Sunset.Value, roomLight.OffTime, timeZone),
-                _ => throw new InvalidOperationException($"Unhandled lights-off rule {roomLight.OffAt}"),
-            };
-
-            if (now >= on && now < off)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        const double minutesPerDay = 24 * 60;
+        var sinceOn = Wrap((localTime - roomLight.OnTime).TotalMinutes, minutesPerDay);
+        var length = Wrap((roomLight.OffTime - roomLight.OnTime).TotalMinutes, minutesPerDay);
+        return sinceOn < length ? sinceOn / length : null;
     }
 
     public static int MinimumBrightness(LightLevel level) => level switch
@@ -193,17 +181,8 @@ public static class ComfortPlanner
         _ => throw new ArgumentOutOfRangeException(nameof(colour), colour, "Unhandled light colour"),
     };
 
-    private static DateTimeOffset NextLocal(DateTimeOffset after, TimeOnly time, TimeZoneInfo timeZone)
-    {
-        var localAfter = TimeZoneInfo.ConvertTime(after, timeZone);
-        var candidate = DateOnly.FromDateTime(localAfter.DateTime).ToDateTime(time);
-        if (candidate <= localAfter.DateTime)
-        {
-            candidate = candidate.AddDays(1);
-        }
-
-        return new DateTimeOffset(candidate, timeZone.GetUtcOffset(candidate));
-    }
+    private static TimeOnly LocalTime(DateTimeOffset now, TimeZoneInfo timeZone)
+        => TimeOnly.FromTimeSpan(TimeZoneInfo.ConvertTime(now, timeZone).TimeOfDay);
 
     private static double Smoothstep(double edge0, double edge1, double x)
     {

@@ -23,7 +23,14 @@ public sealed class ComfortPlannerTests
 
     private static readonly ComfortSettings NeutralRoomLight = NoRoomLight with
     {
-        RoomLight = new RoomLightSettings { Enabled = true, Colour = LightColour.Neutral, Level = LightLevel.Normal },
+        RoomLight = new RoomLightSettings
+        {
+            Enabled = true,
+            OnTime = new TimeOnly(16, 0),
+            OffTime = new TimeOnly(2, 0),
+            Colour = LightColour.Neutral,
+            Level = LightLevel.Normal,
+        },
     };
 
     [Fact]
@@ -163,46 +170,123 @@ public sealed class ComfortPlannerTests
         Assert.Equal(expected, weight, 3);
     }
 
+    // The zone is UTC+1, so 15:00 UTC is 16:00 local.
     [Theory]
-    [InlineData(21, 30, true)]  // 22:30 local, after 14:48 sunset
-    [InlineData(6, 0, true)]    // 07:00 local, before 08:44 sunrise, lit since yesterday's sunset
-    [InlineData(9, 0, false)]   // 10:00 local, after sunrise
-    [InlineData(12, 0, false)]  // 13:00 local, before sunset
-    public void Lights_until_sunrise_follow_the_sun(int utcHour, int utcMinute, bool lit)
+    [InlineData(14, 59, false)]  // 15:59 local, a minute before the default 16:00 on time
+    [InlineData(15, 0, true)]    // 16:00 local: lit at the on time
+    [InlineData(21, 59, true)]   // 22:59 local
+    [InlineData(22, 0, false)]   // 23:00 local: unlit at the off time
+    [InlineData(5, 0, false)]    // 06:00 local
+    public void Default_lights_are_on_from_16_to_23_local_time(int utcHour, int utcMinute, bool lit)
     {
-        var lights = new RoomLightSettings { OffAt = LightsOff.AtSunrise };
-
-        Assert.Equal(lit, ComfortPlanner.IsRoomLit(Utc(2026, 12, 21, utcHour, utcMinute), Winter, lights, Stockholm));
+        Assert.Equal(lit, ComfortPlanner.IsRoomLit(Utc(2026, 12, 21, utcHour, utcMinute), Winter, new RoomLightSettings()));
     }
 
     [Theory]
-    [InlineData(21, 30, true)]   // 22:30 local
-    [InlineData(22, 30, false)]  // 23:30 local, after the 23:00 off time
-    [InlineData(6, 0, false)]    // 07:00 local
-    public void Lights_with_an_off_time_switch_off_then(int utcHour, int utcMinute, bool lit)
+    [InlineData(20, 59, false)]  // 21:59 local
+    [InlineData(21, 0, true)]    // 22:00 local: lit at the on time
+    [InlineData(22, 0, true)]    // 23:00 local
+    [InlineData(23, 30, true)]   // 00:30 local, the next day
+    [InlineData(0, 59, true)]    // 01:59 local
+    [InlineData(1, 0, false)]    // 02:00 local: unlit at the off time
+    [InlineData(11, 0, false)]   // 12:00 local
+    public void Lights_window_may_cross_midnight(int utcHour, int utcMinute, bool lit)
     {
-        var lights = new RoomLightSettings { OffAt = LightsOff.AtTime, OffTime = new TimeOnly(23, 0) };
+        var lights = new RoomLightSettings { OnTime = new TimeOnly(22, 0), OffTime = new TimeOnly(2, 0) };
 
-        Assert.Equal(lit, ComfortPlanner.IsRoomLit(Utc(2026, 12, 21, utcHour, utcMinute), Winter, lights, Stockholm));
+        Assert.Equal(lit, ComfortPlanner.IsRoomLit(Utc(2026, 12, 21, utcHour, utcMinute), Winter, lights));
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(11, 0)]  // 12:00 local
+    [InlineData(19, 0)]  // 20:00 local, the shared time itself
+    public void Equal_on_and_off_times_never_light_the_room(int utcHour, int utcMinute)
+    {
+        var lights = new RoomLightSettings { OnTime = new TimeOnly(20, 0), OffTime = new TimeOnly(20, 0) };
+
+        Assert.False(ComfortPlanner.IsRoomLit(Utc(2026, 12, 21, utcHour, utcMinute), Winter, lights));
     }
 
     [Fact]
-    public void Lights_on_offset_delays_switching_on_after_sunset()
+    public void Lights_window_uses_the_local_clock_not_the_sun()
     {
-        // Sunset 13:48 UTC; lights on an hour later.
-        var lights = new RoomLightSettings { OnMinutesAfterSunset = 60 };
+        // 16:00 local is lit in the summer as in the winter, though the sun is high.
+        Assert.True(ComfortPlanner.IsRoomLit(Utc(2026, 6, 21, 14, 0), Summer, new RoomLightSettings()));
+    }
 
-        Assert.False(ComfortPlanner.IsRoomLit(Utc(2026, 12, 21, 14, 30), Winter, lights, Stockholm));
-        Assert.True(ComfortPlanner.IsRoomLit(Utc(2026, 12, 21, 15, 0), Winter, lights, Stockholm));
+    [Theory]
+    [InlineData(0.0, 0.3333)]
+    [InlineData(0.25, 0.6667)]
+    [InlineData(0.5, 1.0)]
+    [InlineData(0.75, 0.6667)]
+    [InlineData(1.0, 0.3333)]
+    public void Curve_factor_is_a_soft_bell_between_a_third_and_one(double fraction, double expected)
+    {
+        Assert.Equal(expected, RoomLightCurve.Factor(fraction), 4);
+    }
+
+    // 18:00–22:00 local with a 5% evening profile, so the floor decides the brightness.
+    [Theory]
+    [InlineData(17, 0, LightLevel.Normal, 13)]   // 18:00, t=0: 40/3 = 13.3
+    [InlineData(17, 30, LightLevel.Normal, 17)]  // 18:30, t=0.125: 40 * (1/3 + 2/3 * 0.1464) = 17.2
+    [InlineData(18, 0, LightLevel.Normal, 27)]   // 19:00, t=0.25: 40 * 2/3 = 26.7
+    [InlineData(19, 0, LightLevel.Normal, 40)]   // 20:00, t=0.5: the full floor
+    [InlineData(20, 0, LightLevel.Normal, 27)]   // 21:00, t=0.75: 26.7
+    [InlineData(20, 30, LightLevel.Normal, 17)]  // 21:30, t=0.875: 17.2
+    [InlineData(17, 0, LightLevel.Dim, 8)]       // 25/3 = 8.3
+    [InlineData(17, 0, LightLevel.Bright, 18)]   // 55/3 = 18.3
+    public void Curve_scales_the_brightness_floor_across_the_lit_window(int utcHour, int utcMinute, LightLevel level, int expected)
+    {
+        var settings = CurvedEvening(curve: true, level);
+
+        Assert.Equal(expected, Plan(Utc(2026, 12, 21, utcHour, utcMinute), Winter, settings).Brightness);
+    }
+
+    [Theory]
+    [InlineData(17, 0)]
+    [InlineData(18, 0)]
+    [InlineData(19, 0)]
+    public void Without_the_curve_the_floor_stays_flat(int utcHour, int utcMinute)
+    {
+        var settings = CurvedEvening(curve: false, LightLevel.Normal);
+
+        Assert.Equal(40, Plan(Utc(2026, 12, 21, utcHour, utcMinute), Winter, settings).Brightness);
     }
 
     [Fact]
-    public void Polar_night_counts_as_lit_all_day()
+    public void Curve_does_not_change_the_colour()
     {
-        var tromso = new GeoLocation(69.6492, 18.9553);
+        var flat = Plan(Utc(2026, 12, 21, 17, 0), Winter, CurvedEvening(curve: false, LightLevel.Normal));
+        var curved = Plan(Utc(2026, 12, 21, 17, 0), Winter, CurvedEvening(curve: true, LightLevel.Normal));
 
-        Assert.True(ComfortPlanner.IsRoomLit(Utc(2026, 12, 21, 11, 0), Winter, new RoomLightSettings(), tromso));
+        Assert.Equal(flat.Kelvin, curved.Kelvin);
+        Assert.Equal(AmbientSource.RoomModel, curved.Source);
     }
+
+    [Fact]
+    public void Curve_never_lowers_a_schedule_brightness_above_its_floor()
+    {
+        // The default 35% evening profile beats the 13% floor at the start of the window.
+        var settings = NeutralRoomLight with
+        {
+            RoomLight = NeutralRoomLight.RoomLight with { OnTime = new TimeOnly(18, 0), OffTime = new TimeOnly(22, 0), Curve = true },
+        };
+
+        Assert.Equal(35, Plan(Utc(2026, 12, 21, 17, 0), Winter, settings).Brightness);
+    }
+
+    private static ComfortSettings CurvedEvening(bool curve, LightLevel level) => NeutralRoomLight with
+    {
+        Evening = new DisplayProfile(5, 4500),
+        RoomLight = NeutralRoomLight.RoomLight with
+        {
+            OnTime = new TimeOnly(18, 0),
+            OffTime = new TimeOnly(22, 0),
+            Curve = curve,
+            Level = level,
+        },
+    };
 
     private static ComfortPlan Plan(DateTimeOffset now, TimeZoneInfo zone, ComfortSettings settings)
         => ComfortPlanner.Plan(now, zone, settings, Stockholm, BothMonitors, null);

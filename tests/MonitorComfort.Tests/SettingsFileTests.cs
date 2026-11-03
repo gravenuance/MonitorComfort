@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using MonitorComfort.Core.Settings;
 using MonitorComfort.Core.Solar;
 
@@ -34,7 +35,13 @@ public sealed class SettingsFileTests : IDisposable
             Location = new GeoLocation(59.3293, 18.0686),
             NightStart = new TimeOnly(23, 15),
             Night = new DisplayProfile(10, 3000),
-            RoomLight = new RoomLightSettings { OffAt = LightsOff.AtTime, Colour = LightColour.Warm },
+            RoomLight = new RoomLightSettings
+            {
+                OnTime = new TimeOnly(17, 30),
+                OffTime = new TimeOnly(1, 0),
+                Curve = true,
+                Colour = LightColour.Warm,
+            },
         }.WithMonitor("SAM08DA", new MonitorSettings { BrightnessOffset = -20 });
 
         file.Save(settings);
@@ -63,7 +70,7 @@ public sealed class SettingsFileTests : IDisposable
     {
         File.WriteAllText(
             SettingsPath,
-            """{ "schemaVersion": 2, "cameraLight": { "enabled": true, "response": { "gamma": 1.25, "gainCurve": [] }, "calibration": { "bright": { "stops": -1.2, "brightness": 70 } } } }""");
+            """{ "schemaVersion": 3, "cameraLight": { "enabled": true, "response": { "gamma": 1.25, "gainCurve": [] }, "calibration": { "bright": { "stops": -1.2, "brightness": 70 } } } }""");
 
         var result = SettingsFiles.Settings(_directory).Load();
 
@@ -108,6 +115,67 @@ public sealed class SettingsFileTests : IDisposable
         Assert.Equal(new DisplayProfile(70, 6000), result.Value.Day);
         Assert.Equal(ComfortSettings.CurrentSchemaVersion, result.Value.SchemaVersion);
         Assert.Equal(original, File.ReadAllText(SettingsPath + ".v0.bak"));
+    }
+
+    [Fact]
+    public void Lights_that_went_off_at_sunrise_load_as_an_off_time_of_07_00()
+    {
+        const string original = """
+            { "schemaVersion": 2, "roomLight": { "enabled": true, "onMinutesAfterSunset": 30, "offAt": "AtSunrise", "offTime": "23:00:00", "colour": "Warm", "level": "Bright" } }
+            """;
+        File.WriteAllText(SettingsPath, original);
+
+        var result = SettingsFiles.Settings(_directory).Load();
+
+        Assert.True(result.Migrated);
+        Assert.Equal(
+            new RoomLightSettings
+            {
+                OnTime = new TimeOnly(16, 0),
+                OffTime = new TimeOnly(7, 0),
+                Colour = LightColour.Warm,
+                Level = LightLevel.Bright,
+            },
+            result.Value.RoomLight);
+        Assert.Equal(3, result.Value.SchemaVersion);
+        Assert.Equal(original, File.ReadAllText(SettingsPath + ".v2.bak"));
+    }
+
+    [Fact]
+    public void Lights_that_went_off_at_a_set_time_keep_that_time()
+    {
+        File.WriteAllText(
+            SettingsPath,
+            """{ "schemaVersion": 2, "roomLight": { "onMinutesAfterSunset": -20, "offAt": "AtTime", "offTime": "22:15:00" } }""");
+
+        var roomLight = SettingsFiles.Settings(_directory).Load().Value.RoomLight;
+
+        Assert.Equal(new TimeOnly(22, 15), roomLight.OffTime);
+        Assert.Equal(new TimeOnly(16, 0), roomLight.OnTime);
+    }
+
+    [Fact]
+    public void Migration_drops_the_sunset_fields_and_adds_the_on_time()
+    {
+        var root = JsonNode.Parse(
+            """{ "schemaVersion": 2, "roomLight": { "onMinutesAfterSunset": 45, "offAt": "AtSunrise", "offTime": "23:00:00" } }""")!.AsObject();
+
+        var roomLight = SettingsFiles.MigrateSettings(root, 2)["roomLight"]!.AsObject();
+
+        Assert.False(roomLight.ContainsKey("onMinutesAfterSunset"));
+        Assert.False(roomLight.ContainsKey("offAt"));
+        Assert.Equal("16:00:00", roomLight["onTime"]!.GetValue<string>());
+        Assert.Equal("07:00:00", roomLight["offTime"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Migration_leaves_a_file_without_room_light_alone()
+    {
+        var root = JsonNode.Parse("""{ "schemaVersion": 2, "day": { "brightness": 70, "kelvin": 6000 } }""")!.AsObject();
+
+        var migrated = SettingsFiles.MigrateSettings(root, 2);
+
+        Assert.False(migrated.ContainsKey("roomLight"));
     }
 
     [Fact]
