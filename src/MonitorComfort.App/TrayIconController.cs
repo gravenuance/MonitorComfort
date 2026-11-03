@@ -87,10 +87,11 @@ internal sealed class TrayIconController : IDisposable
     {
         if (_window is null)
         {
-            _viewModel = new SettingsViewModel(_host.Settings, _host.Controller, _host.Autostart, _host.Ambient, _host.Time);
+            _viewModel = new SettingsViewModel(_host.Settings, _host.Controller, _host.Autostart, _host.Ambient, _host.Time, _host.UiState);
             _window = new SettingsWindow { DataContext = _viewModel };
             _window.SetAppIcon(_activeBitmap);
             _window.Closing += OnWindowClosing;
+            _window.Opened += OnFirstOpened;
             PlaceNearTray(_window);
         }
 
@@ -113,6 +114,19 @@ internal sealed class TrayIconController : IDisposable
         _trayIcon.Dispose();
         _activeBitmap.Dispose();
         _pausedBitmap.Dispose();
+    }
+
+    // Pages only have a size once laid out, so the height is fitted to the tallest one after the first show.
+    private void OnFirstOpened(object? sender, EventArgs e)
+    {
+        if (sender is not SettingsWindow window)
+        {
+            return;
+        }
+
+        window.Opened -= OnFirstOpened;
+        window.FitHeightToPages();
+        PlaceNearTray(window);
     }
 
     // Bottom-right of the work area, beside the tray with the default taskbar; later opens keep wherever the user moved it.

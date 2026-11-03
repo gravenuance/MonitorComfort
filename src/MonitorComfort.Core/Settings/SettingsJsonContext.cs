@@ -10,4 +10,5 @@ namespace MonitorComfort.Core.Settings;
     AllowTrailingCommas = true)]
 [JsonSerializable(typeof(ComfortSettings))]
 [JsonSerializable(typeof(OriginalMonitorValues))]
+[JsonSerializable(typeof(UiState))]
 internal sealed partial class SettingsJsonContext : JsonSerializerContext;

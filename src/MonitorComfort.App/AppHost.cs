@@ -15,6 +15,8 @@ internal sealed class AppHost : IAsyncDisposable
         Log = log;
         Time = TimeProvider.System;
         Settings = new SettingsService(SettingsFiles.Settings(paths.SettingsDirectory), Time, log);
+        UiState = new UiStateStore(
+            SettingsFiles.UiStateFile(paths.SettingsDirectory), problem => log.Warning("UI state: {Problem}", problem));
         Meter = new CameraLightMeter(log);
 
         // The controller is created right after; the lambda only runs once both exist.
@@ -46,6 +48,8 @@ internal sealed class AppHost : IAsyncDisposable
     public TimeProvider Time { get; }
 
     public SettingsService Settings { get; }
+
+    public UiStateStore UiState { get; }
 
     public ComfortController Controller { get; }
 

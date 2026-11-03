@@ -118,6 +118,7 @@ dotnet publish src/MonitorComfort.App -c Release -o publish
 |---|---|
 | Settings | `%APPDATA%\MonitorComfort\settings.json` |
 | Monitors' original settings | `%APPDATA%\MonitorComfort\original-monitor-settings.json` |
+| Last settings page | `%APPDATA%\MonitorComfort\ui-state.json` |
 | Log (10 MB × 5) | `%LOCALAPPDATA%\MonitorComfort\logs\monitorcomfort.log` |
 
 Set `MONITORCOMFORT_LOG_LEVEL=Debug` to log every value written.

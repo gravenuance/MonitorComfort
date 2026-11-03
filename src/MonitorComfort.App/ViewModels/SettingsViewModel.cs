@@ -26,17 +26,25 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly Autostart _autostart;
     private readonly AmbientLightService _ambient;
     private readonly TimeProvider _time;
+    private readonly UiStateStore _uiState;
     private bool _loading;
     private bool _previewing;
 
     internal SettingsViewModel(
-        SettingsService settings, ComfortController controller, Autostart autostart, AmbientLightService ambient, TimeProvider time)
+        SettingsService settings,
+        ComfortController controller,
+        Autostart autostart,
+        AmbientLightService ambient,
+        TimeProvider time,
+        UiStateStore uiState)
     {
         _settings = settings;
         _controller = controller;
         _autostart = autostart;
         _ambient = ambient;
         _time = time;
+        _uiState = uiState;
+        SelectedPage = PageItem.For(uiState.SettingsPage);
 
         var current = settings.Current;
         Day = new ProfileViewModel("Day", current.Day);
@@ -56,6 +64,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         CameraStatus = DescribeCamera();
         CalibrationSummary = DescribeCalibration();
     }
+
+    public IReadOnlyList<PageItem> Pages { get; } = PageItem.All;
+
+    /// <summary>The page shown; remembered across runs in <see cref="UiStateStore"/>, which never touches the settings.</summary>
+    [ObservableProperty]
+    public partial PageItem? SelectedPage { get; set; }
 
     public ProfileViewModel Day { get; }
 
@@ -81,6 +95,14 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public partial bool IsPaused { get; set; }
 
     public string PauseLabel => IsPaused ? "Resume" : "Pause for 1 hour";
+
+    partial void OnSelectedPageChanged(PageItem? value)
+    {
+        if (value is not null)
+        {
+            _uiState.RememberSettingsPage(value.Page);
+        }
+    }
 
     /// <summary>True while a calibration or reading holds the camera.</summary>
     [ObservableProperty]

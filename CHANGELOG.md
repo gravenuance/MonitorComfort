@@ -8,6 +8,7 @@
 - After dark, the screens' warmth is the average of the schedule's and the room light's, so a warm lamp now makes them warmer as well as a cool light cooler. The room counts more as the sun goes down, a room colour far from the schedule counts less, and the screens are still never more than 500K warmer than the room. With the camera, warmth moves at most 300K per reading while the light drifts. See `docs/adr/0006`.
 - Settings has a new look: amber on graphite in dark mode, with a matching light mode. The title bar blends in, and a status dot shows whether the app is adjusting, paused or needs you.
 - Settings opens beside the tray. Profiles and monitors come first, and location and bedtime share one **Schedule** card.
+- Settings has a list of pages down the left (General, Profiles, Monitors, Schedule, Room lights, Camera, Full-screen) instead of one long scroll, and reopens on the page you used last. The window has a single close button in the app's colours in place of the minimise, maximise and close buttons.
 - Room lights, the camera light meter and full-screen dimming hide their options while switched off.
 - Calibration shows progress and can be cancelled. **Measure now** and the camera choice wait while the camera is busy.
 - Each warmth setting shows a swatch of its white. The pause button reads **Resume** while paused.

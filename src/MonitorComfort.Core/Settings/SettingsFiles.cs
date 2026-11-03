@@ -52,6 +52,13 @@ public static class SettingsFiles
             ? string.Equals(name, "AtSunrise", StringComparison.OrdinalIgnoreCase)
             : value.TryGetValue<int>(out var number) && number == 0);
 
+    public static VersionedJsonFile<UiState> UiStateFile(string directory)
+        => new(
+            Path.Combine(directory, "ui-state.json"),
+            SettingsJsonContext.Default.UiState,
+            UiState.CurrentSchemaVersion,
+            static () => new UiState());
+
     public static VersionedJsonFile<OriginalMonitorValues> Originals(string directory)
         => new(
             Path.Combine(directory, "original-monitor-settings.json"),
