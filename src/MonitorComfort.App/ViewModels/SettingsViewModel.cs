@@ -331,7 +331,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         base.OnPropertyChanged(e);
         if (_loading || e.PropertyName is nameof(StatusText) or nameof(NeedsAttention) or nameof(IsActive) or nameof(IsPaused)
             or nameof(PauseLabel) or nameof(IsCameraBusy) or nameof(LocationMessage) or nameof(SunTimes) or nameof(CameraStatus)
-            or nameof(CalibrationSummary) or nameof(HasCameraChoice))
+            or nameof(CalibrationSummary) or nameof(HasCameraChoice) or nameof(SelectedPage))
         {
             return;
         }
