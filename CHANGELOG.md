@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-11-04
 
 ### Changed
 - Room lights now switch on and off at times you set (16:00 and 23:00 to begin with) instead of following sunset and sunrise. After the update every room light switches on at 16:00, whatever its old offset from sunset, so set your own time. A light that was set to go off at sunrise goes off at 07:00, and one with a set off time keeps it. Settings saved by this version can't be read by 0.5.0 or older, which would start from defaults.
