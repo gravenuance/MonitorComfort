@@ -6,35 +6,85 @@
   <!-- Resources come first: the styles below look their tokens up as static resources. -->
   <Application.Resources>
     <ResourceDictionary>
-      <Thickness x:Key="CardPadding">16</Thickness>
-      <Thickness x:Key="CardMargin">0,0,0,12</Thickness>
-      <Thickness x:Key="PagePadding">16</Thickness>
+      <Thickness x:Key="CardPadding">14,12</Thickness>
+      <Thickness x:Key="CardMargin">0,0,0,10</Thickness>
+      <Thickness x:Key="PagePadding">14,10</Thickness>
       <CornerRadius x:Key="CardRadius">8</CornerRadius>
       <x:Double x:Key="RowSpacing">8</x:Double>
       <x:Double x:Key="ColumnSpacing">12</x:Double>
-      <x:Double x:Key="SectionFontSize">15</x:Double>
-      <x:Double x:Key="StatusFontSize">18</x:Double>
+      <x:Double x:Key="TitleBarHeight">36</x:Double>
+      <!-- Fluent's drawn caption buttons, sized to fill the taller title bar. -->
+      <x:Double x:Key="CaptionButtonHeight">36</x:Double>
+      <x:Double x:Key="BodyFontSize">13</x:Double>
+      <x:Double x:Key="CaptionFontSize">11</x:Double>
+      <x:Double x:Key="HintFontSize">12</x:Double>
+      <x:Double x:Key="StatusDotSize">8</x:Double>
+      <x:Double x:Key="SwatchSize">14</x:Double>
+      <x:Double x:Key="ValueColumnWidth">60</x:Double>
+      <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+      <FontFamily x:Key="ValueFont">Cascadia Mono, Consolas</FontFamily>
 
+      <!-- Instrument-panel identity: amber accent on graphite, with a warm-paper light variant.
+           Checked for WCAG AA against the card colour: text ≥ 4.5:1, accent text ≥ 5:1, input borders ≥ 3:1. -->
       <ResourceDictionary.ThemeDictionaries>
-        <!-- Checked for WCAG AA: text ≥ 6.8:1 and card borders ≥ 3:1 against the card colour. -->
         <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="PageBackgroundBrush" Color="#F4F1EC" />
+          <SolidColorBrush x:Key="TitleBarBrush" Color="#ECE8E1" />
           <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="CardBorderBrush" Color="#8A939B" />
-          <SolidColorBrush x:Key="SubtleTextBrush" Color="#4A5560" />
-          <SolidColorBrush x:Key="AttentionTextBrush" Color="#8A4B00" />
+          <SolidColorBrush x:Key="CardBorderBrush" Color="#D9D3C9" />
+          <SolidColorBrush x:Key="InputBorderBrush" Color="#8A8478" />
+          <SolidColorBrush x:Key="InkBrush" Color="#1C1E22" />
+          <SolidColorBrush x:Key="SubtleTextBrush" Color="#5A6270" />
+          <SolidColorBrush x:Key="AccentTextBrush" Color="#9A5B00" />
+          <SolidColorBrush x:Key="GoodBrush" Color="#2E7D55" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
-          <SolidColorBrush x:Key="CardBackgroundBrush" Color="#1C242A" />
-          <SolidColorBrush x:Key="CardBorderBrush" Color="#6B7680" />
-          <SolidColorBrush x:Key="SubtleTextBrush" Color="#B7C0C7" />
-          <SolidColorBrush x:Key="AttentionTextBrush" Color="#F0B060" />
+          <SolidColorBrush x:Key="PageBackgroundBrush" Color="#14161A" />
+          <SolidColorBrush x:Key="TitleBarBrush" Color="#17191E" />
+          <SolidColorBrush x:Key="CardBackgroundBrush" Color="#1B1E24" />
+          <SolidColorBrush x:Key="CardBorderBrush" Color="#2C3038" />
+          <SolidColorBrush x:Key="InputBorderBrush" Color="#6B7280" />
+          <SolidColorBrush x:Key="InkBrush" Color="#E8EAED" />
+          <SolidColorBrush x:Key="SubtleTextBrush" Color="#868FA0" />
+          <SolidColorBrush x:Key="AccentTextBrush" Color="#E8A33D" />
+          <SolidColorBrush x:Key="GoodBrush" Color="#5FB88A" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
     </ResourceDictionary>
   </Application.Resources>
 
   <Application.Styles>
-    <FluentTheme />
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Light" Accent="#9A5B00" RegionColor="#F4F1EC" />
+        <ColorPaletteResources x:Key="Dark" Accent="#E8A33D" RegionColor="#14161A" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
+
+    <Style Selector="Window">
+      <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+      <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+      <Setter Property="Background" Value="{DynamicResource PageBackgroundBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+    </Style>
+
+    <!-- Avalonia draws its own title text over an extended client area; the window draws icon and name itself. -->
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel > TextBlock">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.titlebar">
+      <Setter Property="Height" Value="{StaticResource TitleBarHeight}" />
+      <Setter Property="Background" Value="{DynamicResource TitleBarBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="Padding" Value="14,0" />
+    </Style>
+    <Style Selector="Border.statusbar">
+      <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="Padding" Value="{StaticResource PagePadding}" />
+    </Style>
 
     <Style Selector="Border.card">
       <Setter Property="Padding" Value="{StaticResource CardPadding}" />
@@ -44,10 +94,42 @@
       <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
-    <Style Selector="TextBlock.section">
-      <Setter Property="FontSize" Value="{StaticResource SectionFontSize}" />
+
+    <!-- Status dot: grey while starting or paused, green while adjusting, amber when it needs the user. -->
+    <Style Selector="Ellipse.dot">
+      <Setter Property="Width" Value="{StaticResource StatusDotSize}" />
+      <Setter Property="Height" Value="{StaticResource StatusDotSize}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Fill" Value="{DynamicResource SubtleTextBrush}" />
+    </Style>
+    <Style Selector="Ellipse.dot.active">
+      <Setter Property="Fill" Value="{DynamicResource GoodBrush}" />
+    </Style>
+    <Style Selector="Ellipse.dot.attention">
+      <Setter Property="Fill" Value="{DynamicResource AccentTextBrush}" />
+    </Style>
+
+    <Style Selector="Border.swatch">
+      <Setter Property="Width" Value="{StaticResource SwatchSize}" />
+      <Setter Property="Height" Value="{StaticResource SwatchSize}" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Section caption: small, upper-case and muted, so the setting titles carry the weight. -->
+    <Style Selector="TextBlock.caption">
+      <Setter Property="FontSize" Value="{StaticResource CaptionFontSize}" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Margin" Value="0,0,0,8" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+      <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
     <Style Selector="TextBlock.label">
       <Setter Property="VerticalAlignment" Value="Center" />
@@ -56,19 +138,25 @@
     <Style Selector="TextBlock.value">
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="HorizontalAlignment" Value="Right" />
-      <Setter Property="FontFeatures" Value="+tnum" />
+      <Setter Property="FontFamily" Value="{StaticResource ValueFont}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
     </Style>
     <Style Selector="TextBlock.status">
-      <Setter Property="FontSize" Value="{StaticResource StatusFontSize}" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBlock.status.attention">
-      <Setter Property="Foreground" Value="{DynamicResource AttentionTextBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
     </Style>
     <Style Selector="TextBlock.hint">
+      <Setter Property="FontSize" Value="{StaticResource HintFontSize}" />
       <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Fluent's input borders are too faint on the graphite cards for 3:1. -->
+    <Style Selector="NumericUpDown, ComboBox, TimePicker, TextBox">
+      <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
     </Style>
   </Application.Styles>
 

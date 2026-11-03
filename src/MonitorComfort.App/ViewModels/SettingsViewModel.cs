@@ -74,7 +74,17 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public partial bool NeedsAttention { get; set; }
 
     [ObservableProperty]
+    public partial bool IsActive { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PauseLabel))]
     public partial bool IsPaused { get; set; }
+
+    public string PauseLabel => IsPaused ? "Resume" : "Pause for 1 hour";
+
+    /// <summary>True while a calibration or reading holds the camera.</summary>
+    [ObservableProperty]
+    public partial bool IsCameraBusy { get; set; }
 
     [ObservableProperty]
     public partial decimal? Latitude { get; set; }
@@ -193,12 +203,26 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(IncludeCancelCommand = true)]
     private async Task CalibrateAsync(CalibrationLevel level, CancellationToken cancellationToken)
     {
         var brightness = (int)Math.Round(ComfortableBrightness);
         var progress = new Progress<string>(message => CameraStatus = message);
-        var error = await _ambient.CalibrateAsync(level, brightness, progress, cancellationToken);
+        string? error;
+        IsCameraBusy = true;
+        try
+        {
+            error = await _ambient.CalibrateAsync(level, brightness, progress, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            error = "Calibration cancelled";
+        }
+        finally
+        {
+            IsCameraBusy = false;
+        }
+
         CalibrationSummary = DescribeCalibration();
         SelectCurrentCamera();
         EndPreview();
@@ -219,7 +243,16 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private async Task MeasureNowAsync(CancellationToken cancellationToken)
     {
         CameraStatus = "Measuring…";
-        await _ambient.MeasureNowAsync(cancellationToken);
+        IsCameraBusy = true;
+        try
+        {
+            await _ambient.MeasureNowAsync(cancellationToken);
+        }
+        finally
+        {
+            IsCameraBusy = false;
+        }
+
         CameraStatus = DescribeCamera();
     }
 
@@ -278,8 +311,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     {
         ArgumentNullException.ThrowIfNull(e);
         base.OnPropertyChanged(e);
-        if (_loading || e.PropertyName is nameof(StatusText) or nameof(NeedsAttention) or nameof(IsPaused)
-            or nameof(LocationMessage) or nameof(SunTimes) or nameof(LightsOffAtTime) or nameof(CameraStatus)
+        if (_loading || e.PropertyName is nameof(StatusText) or nameof(NeedsAttention) or nameof(IsActive) or nameof(IsPaused)
+            or nameof(PauseLabel) or nameof(IsCameraBusy) or nameof(LocationMessage) or nameof(SunTimes) or nameof(LightsOffAtTime) or nameof(CameraStatus)
             or nameof(CalibrationSummary) or nameof(HasCameraChoice))
         {
             return;
@@ -470,6 +503,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     {
         StatusText = Describe(status);
         IsPaused = status.State == ControllerState.Paused;
+        IsActive = status.State == ControllerState.Active;
         NeedsAttention = status.State is ControllerState.NeedsLocation or ControllerState.NoMonitors;
         SyncMonitors(status.Monitors);
     }

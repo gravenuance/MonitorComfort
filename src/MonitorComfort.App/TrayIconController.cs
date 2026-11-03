@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media.Imaging;
@@ -16,6 +17,7 @@ namespace MonitorComfort.App;
 internal sealed class TrayIconController : IDisposable
 {
     private static readonly TimeSpan PauseLength = TimeSpan.FromHours(1);
+    private const double TrayMargin = 12;
 
     private readonly IClassicDesktopStyleApplicationLifetime _desktop;
     private readonly AppHost _host;
@@ -86,8 +88,10 @@ internal sealed class TrayIconController : IDisposable
         if (_window is null)
         {
             _viewModel = new SettingsViewModel(_host.Settings, _host.Controller, _host.Autostart, _host.Ambient, _host.Time);
-            _window = new SettingsWindow { DataContext = _viewModel, Icon = new WindowIcon(_activeBitmap) };
+            _window = new SettingsWindow { DataContext = _viewModel };
+            _window.SetAppIcon(_activeBitmap);
             _window.Closing += OnWindowClosing;
+            PlaceNearTray(_window);
         }
 
         _viewModel?.RefreshCamerasCommand.Execute(null);
@@ -109,6 +113,25 @@ internal sealed class TrayIconController : IDisposable
         _trayIcon.Dispose();
         _activeBitmap.Dispose();
         _pausedBitmap.Dispose();
+    }
+
+    // Bottom-right of the work area, beside the tray with the default taskbar; later opens keep wherever the user moved it.
+    private void PlaceNearTray(Window window)
+    {
+        if (window.Screens.Primary is not { } screen)
+        {
+            _log.Warning("No primary screen reported; opening settings at the system's default position");
+            window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            return;
+        }
+
+        var area = screen.WorkingArea;
+        var scale = screen.Scaling;
+        var margin = (int)Math.Round(TrayMargin * scale);
+        window.Height = Math.Min(window.Height, (area.Height - (2 * margin)) / scale);
+        var width = (int)Math.Ceiling(window.Width * scale);
+        var height = (int)Math.Ceiling(window.Height * scale);
+        window.Position = new PixelPoint(area.Right - width - margin, area.Bottom - height - margin);
     }
 
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
