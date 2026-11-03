@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Text.Json.Serialization;
 using MonitorComfort.Core.Ambient;
 using MonitorComfort.Core.Colour;
@@ -122,8 +121,7 @@ public sealed record ComfortSettings
     /// <summary>2: the camera calibration holds a bright and a dim point.</summary>
     public const int CurrentSchemaVersion = 2;
 
-    private readonly FrozenDictionary<string, MonitorSettings> _monitors =
-        FrozenDictionary<string, MonitorSettings>.Empty;
+    private readonly MonitorSettingsMap _monitors = MonitorSettingsMap.Empty;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
@@ -150,8 +148,7 @@ public sealed record ComfortSettings
     public IReadOnlyDictionary<string, MonitorSettings> Monitors
     {
         get => _monitors;
-        init => _monitors = (value ?? FrozenDictionary<string, MonitorSettings>.Empty)
-            .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        init => _monitors = MonitorSettingsMap.From(value);
     }
 
     public bool StartWithWindows { get; init; } = true;
@@ -163,6 +160,11 @@ public sealed record ComfortSettings
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(monitorId);
         ArgumentNullException.ThrowIfNull(settings);
+        if (Monitors.TryGetValue(monitorId, out var existing) && existing == settings)
+        {
+            return this;
+        }
+
         var copy = new Dictionary<string, MonitorSettings>(Monitors, StringComparer.OrdinalIgnoreCase)
         {
             [monitorId] = settings,

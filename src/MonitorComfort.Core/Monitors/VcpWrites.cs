@@ -41,6 +41,16 @@ public static class WritePolicy
         return writes;
     }
 
+    /// <summary>True when the gains read back differ from what was last written, so something else changed them.</summary>
+    public static bool GainsChangedExternally(MonitorLevels? lastWritten, MonitorLevels? current)
+    {
+        return lastWritten is not null
+            && current is not null
+            && (Math.Abs(current.Gains.Red - lastWritten.Gains.Red) >= MinimumChange
+                || Math.Abs(current.Gains.Green - lastWritten.Gains.Green) >= MinimumChange
+                || Math.Abs(current.Gains.Blue - lastWritten.Gains.Blue) >= MinimumChange);
+    }
+
     private static void Add(List<VcpWrite> writes, VcpCode code, int? current, int target)
     {
         if (current is null || Math.Abs(target - current.Value) >= MinimumChange)
