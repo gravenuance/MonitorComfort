@@ -41,3 +41,7 @@ test-data/
 
 ## Editor/hook backups
 *.bak
+
+## Claude Code files
+CLAUDE.md
+.claude/
