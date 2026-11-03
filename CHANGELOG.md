@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Changed
+- Settings has a new look: amber on graphite in dark mode, with a matching light mode. The title bar blends in, and a status dot shows whether the app is adjusting, paused or needs you.
+- Settings opens beside the tray. Profiles and monitors come first, and location and bedtime share one **Schedule** card.
+- Room lights, the camera light meter and full-screen dimming hide their options while switched off.
+- Calibration shows progress and can be cancelled. **Measure now** and the camera choice wait while the camera is busy.
+- Each warmth setting shows a swatch of its white. The pause button reads **Resume** while paused.
+- Less work while idle. The app checks each monitor's support once per display change instead of every minute, and nothing is sent while the displays are off; waking them re-applies the settings. Display changes come from Windows instead of a check every second.
+- A monitor that doesn't answer DDC/CI is retried less and less often, up to every 30 minutes, instead of every minute.
+- Moving a slider without changing its value no longer re-applies and re-saves the settings.
+- Uses about 23 MB less memory and starts a little faster. The exe is now 128 MB instead of 55 MB.
+- Builds with .NET SDK 10.0.403.
+
 ## 0.5.0 — 2026-10-15
 
 ### Added
