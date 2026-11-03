@@ -10,6 +10,9 @@ using Serilog;
 
 namespace MonitorComfort.App.Monitors;
 
+/// <summary>A monitor's identity, known without opening it.</summary>
+internal sealed record MonitorName(string Id, string Name);
+
 /// <summary>Finds the attached monitors and their DDC/CI handles.</summary>
 internal sealed class DdcMonitorService
 {
@@ -18,18 +21,44 @@ internal sealed class DdcMonitorService
     // Capability strings take a second or more to fetch and never change for a model.
     private readonly ConcurrentDictionary<string, Capabilities> _capabilities = new(StringComparer.OrdinalIgnoreCase);
 
+    // Reading the EDID from the registry is repeated for every monitor on every scan otherwise.
+    private readonly ConcurrentDictionary<string, (string Id, string Name)> _identities = new(StringComparer.OrdinalIgnoreCase);
+
+    private volatile IReadOnlyList<MonitorName>? _names;
+
     public DdcMonitorService(ILogger log) => _log = log.ForContext<DdcMonitorService>();
 
     /// <summary>Opens a handle to every monitor; the caller disposes each one.</summary>
     public IReadOnlyList<DdcMonitor> Enumerate()
     {
         var monitors = new List<DdcMonitor>();
+        Scan(monitors);
+        return monitors;
+    }
+
+    /// <summary>The monitors' ids and names as of the last scan, without opening any handle.</summary>
+    public IReadOnlyList<MonitorName> Names() => _names ?? Scan(null);
+
+    /// <summary>The display layout changed, so identities are read afresh on the next scan.</summary>
+    public void ForgetNames()
+    {
+        _names = null;
+        _identities.Clear();
+    }
+
+    /// <summary>True once the monitor's capabilities have been read; until then a classification is provisional.</summary>
+    public bool HasCapabilities(string monitorId) => _capabilities.ContainsKey(monitorId);
+
+    private List<MonitorName> Scan(List<DdcMonitor>? handles)
+    {
+        var names = new List<MonitorName>();
         foreach (var hmonitor in DisplayMonitorHandles())
         {
-            AddPhysicalMonitors(hmonitor, monitors);
+            AddPhysicalMonitors(hmonitor, names, handles);
         }
 
-        return monitors;
+        _names = names;
+        return names;
     }
 
     /// <summary>
@@ -95,7 +124,8 @@ internal sealed class DdcMonitorService
         return _capabilities.GetOrAdd(monitor.Id, Capabilities.Parse(text));
     }
 
-    private unsafe void AddPhysicalMonitors(nint hmonitor, List<DdcMonitor> monitors)
+    // Without handles only the identities are collected, so nothing needs releasing.
+    private unsafe void AddPhysicalMonitors(nint hmonitor, List<MonitorName> names, List<DdcMonitor>? handles)
     {
         var info = new MonitorInfoEx { Size = sizeof(MonitorInfoEx) };
         if (!NativeMethods.GetMonitorInfo(hmonitor, &info))
@@ -113,33 +143,45 @@ internal sealed class DdcMonitorService
         }
 
         var physical = new PhysicalMonitor[count];
-        fixed (PhysicalMonitor* pointer = physical)
+        if (handles is not null)
         {
-            if (!NativeMethods.GetPhysicalMonitorsFromHMONITOR(hmonitor, count, pointer))
+            fixed (PhysicalMonitor* pointer = physical)
             {
-                return;
+                if (!NativeMethods.GetPhysicalMonitorsFromHMONITOR(hmonitor, count, pointer))
+                {
+                    return;
+                }
             }
         }
 
         for (var i = 0; i < physical.Length; i++)
         {
             var (id, name) = Identify(deviceName, (uint)i);
-            if (monitors.Exists(m => string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase)))
+            if (names.Exists(m => string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase)))
             {
-                id = $"{id}-{monitors.Count}";
+                id = $"{id}-{names.Count}";
             }
 
-            monitors.Add(new DdcMonitor(physical[i].Handle, id, name, deviceName, bounds));
+            names.Add(new MonitorName(id, name));
+            handles?.Add(new DdcMonitor(physical[i].Handle, id, name, deviceName, bounds));
         }
     }
 
     private unsafe (string Id, string Name) Identify(string deviceName, uint index)
     {
         var device = new DisplayDevice { Size = sizeof(DisplayDevice) };
-        if (NativeMethods.EnumDisplayDevices(deviceName, index, &device, NativeMethods.EddGetDeviceInterfaceName)
-            && MonitorIdentity.ParseDeviceInterface(new string(device.DeviceId)) is var (hardwareId, instanceId))
+        if (NativeMethods.EnumDisplayDevices(deviceName, index, &device, NativeMethods.EddGetDeviceInterfaceName))
         {
-            return (hardwareId, ReadEdidName(hardwareId, instanceId) ?? hardwareId);
+            var path = new string(device.DeviceId);
+            if (_identities.TryGetValue(path, out var known))
+            {
+                return known;
+            }
+
+            if (MonitorIdentity.ParseDeviceInterface(path) is var (hardwareId, instanceId))
+            {
+                return _identities[path] = (hardwareId, ReadEdidName(hardwareId, instanceId) ?? hardwareId);
+            }
         }
 
         _log.Warning("Could not identify the monitor on {DeviceName}; using the device name", deviceName);

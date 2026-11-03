@@ -4,7 +4,7 @@ using MonitorComfort.Core.Context;
 namespace MonitorComfort.App.Monitors;
 
 /// <summary>A foreground window covering a whole monitor; the details are for the log.</summary>
-internal sealed record FullscreenWindow(string DeviceName, string WindowClass, string ProcessName, PixelRect Bounds);
+internal sealed record FullscreenWindow(string DeviceName, string WindowClass, uint ProcessId, PixelRect Bounds);
 
 /// <summary>Finds the monitor, if any, whose whole area the foreground window covers.</summary>
 internal sealed class FullscreenDetector
@@ -50,18 +50,12 @@ internal sealed class FullscreenDetector
             (info.Flags & NativeMethods.MonitorInfoPrimary) != 0,
             ShellReportsFullscreen());
         return FullscreenRule.IsFullscreen(candidate)
-            ? new FullscreenWindow(new string(info.Device), windowClass, ProcessName(processId), bounds)
+            ? new FullscreenWindow(new string(info.Device), windowClass, processId, bounds)
             : null;
     }
 
-    // QUNS_BUSY, QUNS_RUNNING_D3D_FULL_SCREEN or QUNS_PRESENTATION_MODE.
-    private static unsafe bool ShellReportsFullscreen()
-    {
-        int state;
-        return NativeMethods.SHQueryUserNotificationState(&state) == 0 && state is 2 or 3 or 4;
-    }
-
-    private static string ProcessName(uint processId)
+    /// <summary>Looked up only when the full-screen state changes: it opens the process, which is too slow to do every second.</summary>
+    public static string ProcessName(uint processId)
     {
         try
         {
@@ -72,5 +66,12 @@ internal sealed class FullscreenDetector
         {
             return $"pid {processId}";
         }
+    }
+
+    // QUNS_BUSY, QUNS_RUNNING_D3D_FULL_SCREEN or QUNS_PRESENTATION_MODE.
+    private static unsafe bool ShellReportsFullscreen()
+    {
+        int state;
+        return NativeMethods.SHQueryUserNotificationState(&state) == 0 && state is 2 or 3 or 4;
     }
 }

@@ -39,9 +39,122 @@ internal unsafe struct PhysicalMonitor
     public fixed char Description[128];
 }
 
+/// <summary>WNDCLASSEXW.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct WindowClass
+{
+    public uint Size;
+    public uint Style;
+    public delegate* unmanaged<nint, uint, nuint, nint, nint> WindowProc;
+    public int ClassExtra;
+    public int WindowExtra;
+    public nint Instance;
+    public nint Icon;
+    public nint Cursor;
+    public nint Background;
+    public char* MenuName;
+    public char* ClassName;
+    public nint SmallIcon;
+}
+
+/// <summary>MSG.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct WindowMessage
+{
+    public nint Window;
+    public uint Message;
+    public nuint WParam;
+    public nint LParam;
+    public uint Time;
+    public int X;
+    public int Y;
+}
+
+/// <summary>POWERBROADCAST_SETTING, for a setting whose data is one DWORD.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct PowerBroadcastSetting
+{
+    public Guid PowerSetting;
+    public uint DataLength;
+    public uint Data;
+}
+
 [System.Security.SuppressUnmanagedCodeSecurity]
 internal static unsafe partial class NativeMethods
 {
+    public const uint WmClose = 0x0010;
+    public const uint WmDestroy = 0x0002;
+    public const uint WmDisplayChange = 0x007E;
+    public const uint WmPowerBroadcast = 0x0218;
+    public const uint WmDeviceChange = 0x0219;
+    public const int DbtDevNodesChanged = 0x0007;
+    public const int PbtPowerSettingChange = 0x8013;
+
+    [LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", StringMarshalling = StringMarshalling.Utf16)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial nint GetModuleHandle(string? moduleName);
+
+    [LibraryImport("user32.dll", EntryPoint = "RegisterClassExW", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial ushort RegisterClassEx(WindowClass* windowClass);
+
+    [LibraryImport("user32.dll", EntryPoint = "UnregisterClassW", StringMarshalling = StringMarshalling.Utf16)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool UnregisterClass(string className, nint instance);
+
+    [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial nint CreateWindowEx(
+        uint extendedStyle,
+        string className,
+        string windowName,
+        uint style,
+        int x,
+        int y,
+        int width,
+        int height,
+        nint parent,
+        nint menu,
+        nint instance,
+        nint parameter);
+
+    [LibraryImport("user32.dll", EntryPoint = "DefWindowProcW")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial nint DefWindowProc(nint window, uint message, nuint wParam, nint lParam);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetMessageW")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial int GetMessage(WindowMessage* message, nint window, uint filterMin, uint filterMax);
+
+    [LibraryImport("user32.dll", EntryPoint = "DispatchMessageW")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial nint DispatchMessage(WindowMessage* message);
+
+    [LibraryImport("user32.dll", EntryPoint = "PostMessageW")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool PostMessage(nint window, uint message, nuint wParam, nint lParam);
+
+    [LibraryImport("user32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial void PostQuitMessage(int exitCode);
+
+    [LibraryImport("user32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DestroyWindow(nint window);
+
+    // Flags 0 delivers WM_POWERBROADCAST to a window.
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    public static partial nint RegisterPowerSettingNotification(nint recipient, Guid* powerSetting, uint flags);
+
+    [LibraryImport("user32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool UnregisterPowerSettingNotification(nint handle);
+
     public const uint MonitorDefaultToNull = 0;
 
     // Returns the monitor device interface path (\\?\DISPLAY#…) in DisplayDevice.DeviceId.
