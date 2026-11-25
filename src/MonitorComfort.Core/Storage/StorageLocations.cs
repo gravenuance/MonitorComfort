@@ -17,6 +17,14 @@ public sealed record StorageLocations(
 
     private const string FolderName = "MonitorComfort";
 
+    /// <summary>The current user's folders, created, honouring <c>MONITORCOMFORT_CACHE_DIR</c>.</summary>
+    public static StorageLocations ForCurrentUser()
+    {
+        var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.Create);
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create);
+        return Resolve(roaming, local, Environment.GetEnvironmentVariable(CacheDirVariable)).CreateDirectories();
+    }
+
     public static StorageLocations Resolve(string roamingAppData, string localAppData, string? cacheDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(roamingAppData);

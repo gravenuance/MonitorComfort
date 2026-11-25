@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Changed
-- The log folder can be moved with `MONITORCOMFORT_CACHE_DIR`: logs go to `logs` inside that absolute folder. Unset or empty values keep, and relative or uncreatable ones fall back to (with a warning in the log), the old `%LOCALAPPDATA%\MonitorComfort\logs`.
+- The log folder can be moved with `MONITORCOMFORT_CACHE_DIR`: logs go to `logs` inside that absolute folder. Without the variable, or with a relative or uncreatable value (which is logged as a warning), logs stay in `%LOCALAPPDATA%\MonitorComfort\logs`.
 - The single-instance lock moved from the log folder to `%APPDATA%\MonitorComfort`, so changing the log folder can never let a second copy start. Update by closing the running copy first: the old and new versions use different lock files.
 
 ## 0.6.1 — 2026-11-25

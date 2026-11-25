@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using MonitorComfort.Core.Storage;
 using Serilog;
 using Serilog.Events;
 
@@ -16,7 +17,7 @@ internal static class Diagnostics
         typeof(Diagnostics).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
 
     /// <summary>A size-rotated log: 10 MB per file, five files kept.</summary>
-    public static ILogger CreateLogger(AppPaths paths)
+    public static ILogger CreateLogger(StorageLocations paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
         var level = Enum.TryParse<LogEventLevel>(Environment.GetEnvironmentVariable(LogLevelVariable), ignoreCase: true, out var parsed)
