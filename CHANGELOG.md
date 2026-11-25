@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 — 2026-11-25
 
 ### Fixed
 - The tray icon shows again. Builds since the Avalonia 12.1.6 update started without one.
