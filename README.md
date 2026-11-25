@@ -119,9 +119,10 @@ dotnet publish src/MonitorComfort.App -c Release -o publish
 | Settings | `%APPDATA%\MonitorComfort\settings.json` |
 | Monitors' original settings | `%APPDATA%\MonitorComfort\original-monitor-settings.json` |
 | Last settings page | `%APPDATA%\MonitorComfort\ui-state.json` |
-| Log (10 MB × 5) | `%LOCALAPPDATA%\MonitorComfort\logs\monitorcomfort.log` |
+| Single-instance lock | `%APPDATA%\MonitorComfort\instance.lock` |
+| Log (10 MB × 5) | `%LOCALAPPDATA%\MonitorComfort\logs\monitorcomfort.log`, or `logs\monitorcomfort.log` under `MONITORCOMFORT_CACHE_DIR` |
 
-Set `MONITORCOMFORT_LOG_LEVEL=Debug` to log every value written.
+Set `MONITORCOMFORT_LOG_LEVEL=Debug` to log every value written. Set `MONITORCOMFORT_CACHE_DIR` to an absolute folder to keep the logs there; unset, empty, relative or uncreatable values fall back to `%LOCALAPPDATA%\MonitorComfort` with a warning in the log.
 
 ## Licence
 
