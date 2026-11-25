@@ -19,6 +19,7 @@ internal sealed class TrayIconController : IDisposable
     private static readonly TimeSpan PauseLength = TimeSpan.FromHours(1);
     private const double TrayMargin = 12;
 
+    private readonly Application _application;
     private readonly IClassicDesktopStyleApplicationLifetime _desktop;
     private readonly AppHost _host;
     private readonly ILogger _log;
@@ -35,8 +36,9 @@ internal sealed class TrayIconController : IDisposable
     private SettingsViewModel? _viewModel;
     private bool _quitting;
 
-    public TrayIconController(IClassicDesktopStyleApplicationLifetime desktop, AppHost host)
+    public TrayIconController(Application application, IClassicDesktopStyleApplicationLifetime desktop, AppHost host)
     {
+        _application = application;
         _desktop = desktop;
         _host = host;
         _log = host.Log.ForContext<TrayIconController>();
@@ -81,6 +83,9 @@ internal sealed class TrayIconController : IDisposable
 
         _desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
         _host.Controller.StatusChanged += OnStatusChanged;
+
+        // Avalonia creates the native icon only once it is attached to the application's tray icon list.
+        TrayIcon.SetIcons(_application, [_trayIcon]);
     }
 
     public void ShowSettings()
@@ -110,7 +115,7 @@ internal sealed class TrayIconController : IDisposable
         }
 
         _viewModel?.Dispose();
-        _trayIcon.IsVisible = false;
+        TrayIcon.SetIcons(_application, null);
         _trayIcon.Dispose();
         _activeBitmap.Dispose();
         _pausedBitmap.Dispose();
