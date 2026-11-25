@@ -11,8 +11,8 @@ using Serilog;
 namespace MonitorComfort.App;
 
 /// <summary>
-/// The app's always-present entry point. Closing the settings window only hides it, so the
-/// built view is reused the next time it opens.
+/// The app's always-present entry point. The user closing the settings window only hides it, so the
+/// built view is reused the next time it opens; a shutdown close releases it and the next open builds a new one.
 /// </summary>
 internal sealed class TrayIconController : IDisposable
 {
@@ -34,6 +34,7 @@ internal sealed class TrayIconController : IDisposable
 
     private SettingsWindow? _window;
     private SettingsViewModel? _viewModel;
+    private bool _disposed;
 
     public TrayIconController(Application application, IClassicDesktopStyleApplicationLifetime desktop, AppHost host)
     {
@@ -105,6 +106,7 @@ internal sealed class TrayIconController : IDisposable
     // Shutdown has normally closed the window already; one still open is closed here so its release runs first.
     public void Dispose()
     {
+        _disposed = true;
         _host.Controller.StatusChanged -= OnStatusChanged;
         if (_window is { } window)
         {
@@ -189,6 +191,12 @@ internal sealed class TrayIconController : IDisposable
 
     private void OnStatusChanged(object? sender, ComfortStatus status) => Dispatcher.UIThread.Post(() =>
     {
+        // An update posted just before Dispose must not touch the disposed icon.
+        if (_disposed)
+        {
+            return;
+        }
+
         try
         {
             var text = SettingsViewModel.Describe(status);
