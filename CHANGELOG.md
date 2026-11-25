@@ -4,6 +4,7 @@
 
 ### Fixed
 - The tray icon shows again. Builds since the Avalonia 12.1.6 update started without one.
+- Signing out or shutting down Windows no longer stalls on MonitorComfort once Settings has been opened. Settings saves on the way out, and can be opened from the tray again if the sign-out is cancelled.
 
 ## 0.6.0 — 2026-11-04
 

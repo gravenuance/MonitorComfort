@@ -11,8 +11,8 @@ using Serilog;
 namespace MonitorComfort.App;
 
 /// <summary>
-/// The app's always-present entry point. Closing the settings window only hides it, so the
-/// built view is reused the next time it opens.
+/// The app's always-present entry point. The user closing the settings window only hides it, so the
+/// built view is reused the next time it opens; a shutdown close releases it and the next open builds a new one.
 /// </summary>
 internal sealed class TrayIconController : IDisposable
 {
@@ -34,7 +34,7 @@ internal sealed class TrayIconController : IDisposable
 
     private SettingsWindow? _window;
     private SettingsViewModel? _viewModel;
-    private bool _quitting;
+    private bool _disposed;
 
     public TrayIconController(Application application, IClassicDesktopStyleApplicationLifetime desktop, AppHost host)
     {
@@ -59,11 +59,7 @@ internal sealed class TrayIconController : IDisposable
         var restore = new NativeMenuItem("Restore original monitor settings");
         restore.Click += (_, _) => _host.Controller.RestoreOriginals();
         var quit = new NativeMenuItem("Quit");
-        quit.Click += (_, _) =>
-        {
-            _quitting = true;
-            _desktop.Shutdown();
-        };
+        quit.Click += (_, _) => _desktop.Shutdown();
 
         _trayIcon = new TrayIcon
         {
@@ -96,6 +92,7 @@ internal sealed class TrayIconController : IDisposable
             _window = new SettingsWindow { DataContext = _viewModel };
             _window.SetAppIcon(_activeBitmap);
             _window.Closing += OnWindowClosing;
+            _window.Closed += OnWindowClosed;
             _window.Opened += OnFirstOpened;
             PlaceNearTray(_window);
         }
@@ -106,15 +103,18 @@ internal sealed class TrayIconController : IDisposable
         _window.Activate();
     }
 
+    // Shutdown has normally closed the window already; one still open is closed here so its release runs first.
     public void Dispose()
     {
+        _disposed = true;
         _host.Controller.StatusChanged -= OnStatusChanged;
-        if (_window is not null)
+        if (_window is { } window)
         {
-            _window.Closing -= OnWindowClosing;
+            window.Closing -= OnWindowClosing;
+            window.Close();
+            ReleaseWindow();
         }
 
-        _viewModel?.Dispose();
         TrayIcon.SetIcons(_application, null);
         _trayIcon.Dispose();
         _activeBitmap.Dispose();
@@ -155,19 +155,48 @@ internal sealed class TrayIconController : IDisposable
 
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
-        if (_quitting || sender is not Window window)
+        _viewModel?.EndPreview();
+        _host.Settings.Flush();
+
+        // Only the user's close hides the window; an app or Windows shutdown must close it, or logoff is blocked.
+        if (e.CloseReason is WindowCloseReason.ApplicationShutdown or WindowCloseReason.OSShutdown
+            || sender is not Window window)
         {
             return;
         }
 
         e.Cancel = true;
         window.Hide();
-        _viewModel?.EndPreview();
-        _host.Settings.Flush();
+    }
+
+    // A closed window can't be shown again, so a cancelled sign-out leaves the next ShowSettings to build a new one.
+    private void OnWindowClosed(object? sender, EventArgs e) => ReleaseWindow();
+
+    // The window lets go of the view model before the view model is disposed.
+    private void ReleaseWindow()
+    {
+        if (_window is not { } window)
+        {
+            return;
+        }
+
+        window.Closing -= OnWindowClosing;
+        window.Closed -= OnWindowClosed;
+        window.Opened -= OnFirstOpened;
+        window.DataContext = null;
+        _window = null;
+        _viewModel?.Dispose();
+        _viewModel = null;
     }
 
     private void OnStatusChanged(object? sender, ComfortStatus status) => Dispatcher.UIThread.Post(() =>
     {
+        // An update posted just before Dispose must not touch the disposed icon.
+        if (_disposed)
+        {
+            return;
+        }
+
         try
         {
             var text = SettingsViewModel.Describe(status);
