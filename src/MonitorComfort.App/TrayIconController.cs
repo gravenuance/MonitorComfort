@@ -34,7 +34,6 @@ internal sealed class TrayIconController : IDisposable
 
     private SettingsWindow? _window;
     private SettingsViewModel? _viewModel;
-    private bool _quitting;
 
     public TrayIconController(Application application, IClassicDesktopStyleApplicationLifetime desktop, AppHost host)
     {
@@ -59,11 +58,7 @@ internal sealed class TrayIconController : IDisposable
         var restore = new NativeMenuItem("Restore original monitor settings");
         restore.Click += (_, _) => _host.Controller.RestoreOriginals();
         var quit = new NativeMenuItem("Quit");
-        quit.Click += (_, _) =>
-        {
-            _quitting = true;
-            _desktop.Shutdown();
-        };
+        quit.Click += (_, _) => _desktop.Shutdown();
 
         _trayIcon = new TrayIcon
         {
@@ -106,12 +101,16 @@ internal sealed class TrayIconController : IDisposable
         _window.Activate();
     }
 
+    // Teardown runs outside-in: the window goes before the view model it binds to, and the bitmaps last.
     public void Dispose()
     {
         _host.Controller.StatusChanged -= OnStatusChanged;
         if (_window is not null)
         {
             _window.Closing -= OnWindowClosing;
+            _window.Opened -= OnFirstOpened;
+            _window.Close();
+            _window.DataContext = null;
         }
 
         _viewModel?.Dispose();
@@ -155,7 +154,9 @@ internal sealed class TrayIconController : IDisposable
 
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
-        if (_quitting || sender is not Window window)
+        // Only the user's close hides the window; an app or Windows shutdown must close it, or logoff is blocked.
+        if (e.CloseReason is WindowCloseReason.ApplicationShutdown or WindowCloseReason.OSShutdown
+            || sender is not Window window)
         {
             return;
         }
