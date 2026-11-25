@@ -80,11 +80,12 @@ internal sealed class TrayIconController : IDisposable
             },
         };
         _trayIcon.Clicked += (_, _) => ShowSettings();
-        // Avalonia creates the native icon only once it is attached to the application's tray icon list.
-        TrayIcon.SetIcons(_application, [_trayIcon]);
 
         _desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
         _host.Controller.StatusChanged += OnStatusChanged;
+
+        // Avalonia creates the native icon only once it is attached to the application's tray icon list.
+        TrayIcon.SetIcons(_application, [_trayIcon]);
     }
 
     public void ShowSettings()
