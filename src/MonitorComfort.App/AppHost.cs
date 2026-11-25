@@ -2,6 +2,7 @@ using MonitorComfort.App.Ambient;
 using MonitorComfort.App.Monitors;
 using MonitorComfort.App.Services;
 using MonitorComfort.Core.Settings;
+using MonitorComfort.Core.Storage;
 using Serilog;
 
 namespace MonitorComfort.App;
@@ -9,7 +10,7 @@ namespace MonitorComfort.App;
 /// <summary>Composition root: builds the long-lived services once and tears them down in reverse.</summary>
 internal sealed class AppHost : IAsyncDisposable
 {
-    public AppHost(AppPaths paths, ILogger log)
+    public AppHost(StorageLocations paths, ILogger log)
     {
         ArgumentNullException.ThrowIfNull(paths);
         Log = log;

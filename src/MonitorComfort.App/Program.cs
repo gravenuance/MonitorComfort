@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using MonitorComfort.App.Services;
 using MonitorComfort.Core.Ambient;
+using MonitorComfort.Core.Storage;
 using Serilog;
 
 namespace MonitorComfort.App;
@@ -12,12 +13,17 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        var paths = AppPaths.Resolve();
+        var paths = StorageLocations.ForCurrentUser();
         var log = Diagnostics.CreateLogger(paths);
         Log.Logger = log;
         Diagnostics.InstallCrashHandlers(log);
 
-        using var instance = SingleInstanceGuard.TryAcquire(Path.Combine(paths.LogDirectory, "instance.lock"));
+        if (paths.Warning is not null)
+        {
+            log.Warning("{Problem}", paths.Warning);
+        }
+
+        using var instance = SingleInstanceGuard.TryAcquire(paths.InstanceLockFile);
         if (instance is null)
         {
             log.Information("Another MonitorComfort instance is running; exiting");
@@ -26,11 +32,12 @@ internal static class Program
         }
 
         log.Information(
-            "MonitorComfort {Version} starting on {OS} ({Architecture}); settings in {SettingsDirectory}; log level from {LogLevelVariable}",
+            "MonitorComfort {Version} starting on {OS} ({Architecture}); settings in {SettingsDirectory}; logs in {LogDirectory}; log level from {LogLevelVariable}",
             Diagnostics.Version,
             RuntimeInformation.OSDescription,
             RuntimeInformation.OSArchitecture,
             paths.SettingsDirectory,
+            paths.LogDirectory,
             Diagnostics.LogLevelVariable);
 
         try
