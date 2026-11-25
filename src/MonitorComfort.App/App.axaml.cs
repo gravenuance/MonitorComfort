@@ -18,7 +18,7 @@ public sealed partial class App : Application
             && Host is { } host)
         {
 #pragma warning disable CA2000 // Disposed by the Exit handler below, on the UI thread, while Avalonia still runs.
-            var tray = new TrayIconController(desktop, host);
+            var tray = new TrayIconController(this, desktop, host);
 #pragma warning restore CA2000
             desktop.Exit += (_, _) => tray.Dispose();
             // A failure in a UI handler is logged and the app carries on; it must never close the tray app.
