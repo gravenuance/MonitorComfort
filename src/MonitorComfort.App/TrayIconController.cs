@@ -91,6 +91,7 @@ internal sealed class TrayIconController : IDisposable
             _window = new SettingsWindow { DataContext = _viewModel };
             _window.SetAppIcon(_activeBitmap);
             _window.Closing += OnWindowClosing;
+            _window.Closed += OnWindowClosed;
             _window.Opened += OnFirstOpened;
             PlaceNearTray(_window);
         }
@@ -101,19 +102,17 @@ internal sealed class TrayIconController : IDisposable
         _window.Activate();
     }
 
-    // Teardown runs outside-in: the window goes before the view model it binds to, and the bitmaps last.
+    // Shutdown has normally closed the window already; one still open is closed here so its release runs first.
     public void Dispose()
     {
         _host.Controller.StatusChanged -= OnStatusChanged;
-        if (_window is not null)
+        if (_window is { } window)
         {
-            _window.Closing -= OnWindowClosing;
-            _window.Opened -= OnFirstOpened;
-            _window.Close();
-            _window.DataContext = null;
+            window.Closing -= OnWindowClosing;
+            window.Close();
+            ReleaseWindow();
         }
 
-        _viewModel?.Dispose();
         TrayIcon.SetIcons(_application, null);
         _trayIcon.Dispose();
         _activeBitmap.Dispose();
@@ -154,6 +153,9 @@ internal sealed class TrayIconController : IDisposable
 
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
+        _viewModel?.EndPreview();
+        _host.Settings.Flush();
+
         // Only the user's close hides the window; an app or Windows shutdown must close it, or logoff is blocked.
         if (e.CloseReason is WindowCloseReason.ApplicationShutdown or WindowCloseReason.OSShutdown
             || sender is not Window window)
@@ -163,8 +165,26 @@ internal sealed class TrayIconController : IDisposable
 
         e.Cancel = true;
         window.Hide();
-        _viewModel?.EndPreview();
-        _host.Settings.Flush();
+    }
+
+    // A closed window can't be shown again, so a cancelled sign-out leaves the next ShowSettings to build a new one.
+    private void OnWindowClosed(object? sender, EventArgs e) => ReleaseWindow();
+
+    // The window lets go of the view model before the view model is disposed.
+    private void ReleaseWindow()
+    {
+        if (_window is not { } window)
+        {
+            return;
+        }
+
+        window.Closing -= OnWindowClosing;
+        window.Closed -= OnWindowClosed;
+        window.Opened -= OnFirstOpened;
+        window.DataContext = null;
+        _window = null;
+        _viewModel?.Dispose();
+        _viewModel = null;
     }
 
     private void OnStatusChanged(object? sender, ComfortStatus status) => Dispatcher.UIThread.Post(() =>
