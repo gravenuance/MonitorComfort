@@ -13,7 +13,7 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
 
-    <Version>0.6.1</Version>
+    <Version>0.6.2</Version>
     <Product>MonitorComfort</Product>
     <Authors>gravenuance</Authors>
     <Company>MonitorComfort</Company>

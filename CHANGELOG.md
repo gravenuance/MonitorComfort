@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.2 — 2026-11-25
 
 ### Changed
 - The log folder can be moved with `MONITORCOMFORT_CACHE_DIR`: logs go to `logs` inside that absolute folder. Without the variable, or with a relative or uncreatable value (which is logged as a warning), logs stay in `%LOCALAPPDATA%\MonitorComfort\logs`.
