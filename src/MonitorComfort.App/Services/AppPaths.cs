@@ -10,25 +10,9 @@ internal sealed record AppPaths(string SettingsDirectory, string LogDirectory, s
     {
         var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.Create);
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create);
-        var locations = StorageLocations.Resolve(
-            roaming, local, Environment.GetEnvironmentVariable(StorageLocations.CacheDirVariable));
-
-        Directory.CreateDirectory(locations.SettingsDirectory);
-        var warning = locations.Warning;
-        var logDirectory = locations.LogDirectory;
-        try
-        {
-            Directory.CreateDirectory(logDirectory);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-            && logDirectory != locations.DefaultLogDirectory)
-        {
-            // A bad override must not stop a logon-started tray app from running.
-            logDirectory = locations.DefaultLogDirectory;
-            warning = $"{StorageLocations.CacheDirVariable} points at '{locations.LogDirectory}', which cannot be created ({ex.Message}); using {logDirectory} instead.";
-            Directory.CreateDirectory(logDirectory);
-        }
-
-        return new AppPaths(locations.SettingsDirectory, logDirectory, locations.InstanceLockFile, warning);
+        var locations = StorageLocations
+            .Resolve(roaming, local, Environment.GetEnvironmentVariable(StorageLocations.CacheDirVariable))
+            .CreateDirectories();
+        return new AppPaths(locations.SettingsDirectory, locations.LogDirectory, locations.InstanceLockFile, locations.Warning);
     }
 }

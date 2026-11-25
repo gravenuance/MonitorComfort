@@ -43,4 +43,25 @@ public sealed record StorageLocations(
 
         return new StorageLocations(settings, Path.Combine(cacheDirectory, "logs"), defaultLogs, lockFile, Warning: null);
     }
+
+    /// <summary>Creates the folders. A log folder that cannot be created falls back to the default, so a bad override never stops the tray app from starting.</summary>
+    public StorageLocations CreateDirectories()
+    {
+        Directory.CreateDirectory(SettingsDirectory);
+        try
+        {
+            Directory.CreateDirectory(LogDirectory);
+            return this;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
+            && !string.Equals(LogDirectory, DefaultLogDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            Directory.CreateDirectory(DefaultLogDirectory);
+            return this with
+            {
+                LogDirectory = DefaultLogDirectory,
+                Warning = $"{CacheDirVariable} points at '{LogDirectory}', which cannot be created ({ex.Message}); using {DefaultLogDirectory} instead.",
+            };
+        }
+    }
 }
